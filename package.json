@@ -8,9 +8,14 @@
 	"main": "./dist/index.js",
 	"scripts": {
 		"dev:segments": "ENVIRONMENT=development dotenv-run -f ./environments/staging/secrets/.env -- turbo run dev --filter=@tmlmobilidade/segment-generator",
+		"dev:travel-times": "ENVIRONMENT=development dotenv-run -f ./environments/staging/secrets/.env -- turbo run dev --filter=@tmlmobilidade/segment-travel-times",
 		"lint": "eslint ./src",
 		"lint:fix": "turbo lint:fix",
 		"rinse": "npx --yes @tmlmobilidade/repo-rinse"
+	},
+	"dependencies": {
+		"@turf/turf": "^7.3.2",
+		"@types/geojson": "^7946.0.16"
 	},
 	"devDependencies": {
 		"@carrismetropolitana/eslint": "20250622.1204.50",
@@ -20,9 +25,5 @@
 	"packageManager": "npm@11.7.0",
 	"workspaces": [
 		"modules/**/*"
-	],
-	"dependencies": {
-		"@turf/turf": "^7.3.2",
-		"@types/geojson": "^7946.0.16"
-	}
+	]
 }
