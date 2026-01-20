@@ -67,3 +67,6 @@ env
 *.db
 *.db-shm
 *.db-wal
+
+# GeoJSON
+*.geojson
