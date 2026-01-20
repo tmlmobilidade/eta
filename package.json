@@ -20,5 +20,9 @@
 	"packageManager": "npm@11.7.0",
 	"workspaces": [
 		"modules/**/*"
-	]
+	],
+	"dependencies": {
+		"@turf/turf": "^7.3.2",
+		"@types/geojson": "^7946.0.16"
+	}
 }
