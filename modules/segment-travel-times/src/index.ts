@@ -1,20 +1,20 @@
 /* * */
 
+import { createClient } from '@clickhouse/client';
 import { Dates } from '@tmlmobilidade/dates';
-import { AggregationPipeline, hashedShapes, rides, simplifiedVehicleEvents } from '@tmlmobilidade/interfaces';
+import { AggregationCursor, AggregationPipeline, hashedShapes, rides } from '@tmlmobilidade/interfaces';
 import { Logger } from '@tmlmobilidade/logger';
 import { Timer } from '@tmlmobilidade/timer';
-import { Ride, SimplifiedVehicleEvent } from '@tmlmobilidade/types';
+import { ClickHouseVehicleEvent, Ride } from '@tmlmobilidade/types';
 import * as turf from '@turf/turf';
 import { Position } from 'geojson';
 import geohash from 'ngeohash';
 
 import { Coordinate } from './types.js';
-import { geohashRange } from './utils/geohashRange.js';
 
 /* * */
 
-const RUN_INTERVAL = 60_000; // 1 minute in milliseconds
+const RUN_INTERVAL = 60_000 * 10; // 10 minutes in milliseconds
 
 const settings = {
 	geohashPrecision: 7,
@@ -29,15 +29,21 @@ async function main() {
 	Logger.init();
 
 	const globalTimer = new Timer();
+	const clickhouseClient = createClient({
+		database: process.env.CLICKHOUSE_DATABASE,
+		password: process.env.CLICKHOUSE_PASSWORD,
+		url: `http://${process.env.CLICKHOUSE_HOST}:${process.env.CLICKHOUSE_PORT}`,
+		username: process.env.CLICKHOUSE_USERNAME,
+	});
 
 	// 1. Fetch rides from the database
 	const aggregationPipeline: AggregationPipeline<Ride> = [
 		{ $match: { start_time_scheduled: { $gte: settings.rideStartDate, $lt: settings.rideEndDate } } },
-		{ $match: { line_id: { $in: [2730] } } },
 		{
 			$project: {
 				_id: 1,
 				hashed_shape_id: 1,
+				line_id: 1,
 				start_time_scheduled: 1,
 				trip_id: 1,
 				vehicle_ids: 1,
@@ -45,18 +51,20 @@ async function main() {
 		},
 	];
 	const collection = await rides.getCollection();
-	const cursor = collection.aggregate(aggregationPipeline).batchSize(10_000);
+	const cursor = collection.aggregate<Ride>(aggregationPipeline).batchSize(10_000);
 	const totalRides = await collection.countDocuments({
-		line_id: { $in: [1001] },
 		start_time_scheduled: { $gte: settings.rideStartDate, $lt: settings.rideEndDate },
 	});
 
-	// 1.2. Fetch all hashed shapes and chunk them into segments
+	// 1.2. Fetch all hashed shapes and chunk them into segments, grouped by line_id
 	Logger.info(`Fetching ${totalRides} rides...`);
-	const hashedShapeIds = new Map<string, { geohashes: Set<string>, node: Coordinate[] }>();
+	const processedHashedShapeIds = new Set<string>();
+	const lineShapes = new Map<number, { geohashes: Set<string>, hashedShapeIds: string[], nodes: Map<string, Coordinate[]> }>();
+
 	for await (const doc of cursor) {
 		// Skip if the hashed shape id has already been processed
-		if (hashedShapeIds.has(doc.hashed_shape_id)) continue;
+		if (processedHashedShapeIds.has(doc.hashed_shape_id)) continue;
+		processedHashedShapeIds.add(doc.hashed_shape_id);
 
 		// Fetch the hashed shape with its points
 		const hashed_shape = await hashedShapes.findOne(
@@ -81,38 +89,80 @@ async function main() {
 			return coordinates[coordinates.length - 1] as Coordinate;
 		});
 
-		hashedShapeIds.set(doc.hashed_shape_id, { geohashes: new Set(segmentEndpoints.map(endpoint => geohash.encode(endpoint[1], endpoint[0], settings.geohashPrecision))), node: segmentEndpoints });
+		// Get or create the line entry and add this hashed shape's data
+		let lineData = lineShapes.get(doc.line_id);
+		if (!lineData) {
+			lineData = { geohashes: new Set(), hashedShapeIds: [], nodes: new Map() };
+			lineShapes.set(doc.line_id, lineData);
+		}
+
+		lineData.hashedShapeIds.push(doc.hashed_shape_id);
+		lineData.nodes.set(doc.hashed_shape_id, segmentEndpoints);
+		for (const endpoint of segmentEndpoints) {
+			lineData.geohashes.add(geohash.encode(endpoint[1], endpoint[0], settings.geohashPrecision));
+		}
 	}
 
-	// 2. Test Vehicle Events for each hashed shape
-	for (const [hashedShapeId, { geohashes, node }] of hashedShapeIds.entries()) {
-		Logger.title(`Testing hashed shape ${hashedShapeId} with ${geohashes.size} geohashes and ${node.length} nodes`);
+	Logger.info(`Grouped ${processedHashedShapeIds.size} hashed shapes into ${lineShapes.size} lines`);
 
-		// 2.1 Fetch all vehicle events for the hashed shape
-		const aggregationPipeline = [
-			{ $match: { created_at: { $gte: settings.rideStartDate, $lt: settings.rideEndDate } } },
-			{ $match: geohashRange(Array.from(geohashes)) },
-		];
-		const collection = await simplifiedVehicleEvents.getCollection();
-		const cursor = collection.aggregate(aggregationPipeline).batchSize(100_000);
+	// Cache for vehicle events by geohash - persists across lines
+	const geohashEventsCache = new Map<string, ClickHouseVehicleEvent[]>();
 
-		const groupedEvents = new Map<string, number>();
-		let currentDocument = 0;
-		for await (const doc of cursor) {
-			currentDocument++;
-			if (currentDocument % 5000 === 0) {
-				Logger.info(`Processing document ${currentDocument}...`);
+	// 2. Fetch vehicle events grouped by line_id
+	for (const [lineId, { geohashes, hashedShapeIds, nodes }] of Array.from(lineShapes.entries()).sort(([aId], [bId]) => aId - bId)) {
+		Logger.title(`Processing line ${lineId} with ${hashedShapeIds.length} hashed shapes and ${geohashes.size} geohashes`);
+
+		// 2.1 Find geohashes that haven't been cached yet
+		const allGeohashes = Array.from(geohashes);
+		const uncachedGeohashes = allGeohashes.filter(gh => !geohashEventsCache.has(gh));
+		const cachedGeohashes = allGeohashes.filter(gh => geohashEventsCache.has(gh));
+
+		Logger.info(`Found ${cachedGeohashes.length} cached geohashes, ${uncachedGeohashes.length} to fetch`);
+
+		// 2.2 Fetch only uncached geohashes from ClickHouse
+		if (uncachedGeohashes.length > 0) {
+			const query = `
+				WHERE created_at >= ${settings.rideStartDate} AND created_at < ${settings.rideEndDate}
+				AND geohash_${settings.geohashPrecision} IN ('${uncachedGeohashes.join('\',\'')}')
+			`;
+
+			const result = await clickhouseClient.query({
+				format: 'JSONEachRow',
+				query: `SELECT trip_id, geohash_${settings.geohashPrecision} as geohash FROM vehicle_events ${query}`,
+			});
+
+			// Initialize cache entries for uncached geohashes
+			for (const gh of uncachedGeohashes) {
+				geohashEventsCache.set(gh, []);
 			}
-			const ve = doc as SimplifiedVehicleEvent;
 
-			const operationalDate = Dates.fromUnixTimestamp(ve.created_at).setZone('Europe/Lisbon', 'rebase_utc').operational_date;
-			groupedEvents.set(ve.trip_id + '-' + operationalDate, (groupedEvents.get(ve.trip_id + '-' + operationalDate) ?? 0) + 1);
+			let currentRow = 0;
+			for await (const rows of result.stream()) {
+				for (const row of rows) {
+					currentRow++;
+					if (currentRow % 100_000 === 0) {
+						Logger.info(`Fetched ${currentRow} rows...`);
+					}
+					const data = row.json<ClickHouseVehicleEvent & { geohash: string }>();
+					const cachedEvents = geohashEventsCache.get(data.geohash);
+					if (cachedEvents) {
+						cachedEvents.push(data);
+					}
+				}
+			}
+			Logger.info(`Fetched and cached ${currentRow} events for ${uncachedGeohashes.length} geohashes`);
 		}
 
-		for (const [tripIdOperationalDate, count] of groupedEvents.entries()) {
-			const [tripId, operationalDate] = tripIdOperationalDate.split('-');
-			Logger.info(`${tripId} - ${operationalDate}: ${count}`);
+		// 2.3 Aggregate events from cache for all geohashes in this line
+		const groupedEvents = new Map<string, number>();
+		for (const gh of allGeohashes) {
+			const events = geohashEventsCache.get(gh) ?? [];
+			for (const event of events) {
+				groupedEvents.set(event.trip_id, (groupedEvents.get(event.trip_id) ?? 0) + 1);
+			}
 		}
+
+		console.log(groupedEvents);
 
 		Logger.divider();
 	}
