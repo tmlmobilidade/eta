@@ -24,17 +24,20 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@tmlmobilidade/dates": "^20260105.1950.3",
-		"@tmlmobilidade/interfaces": "^20260113.1457.7",
-		"@tmlmobilidade/logger": "^20260105.1950.3",
-		"@tmlmobilidade/timer": "^20260113.1457.7",
-		"@tmlmobilidade/types": "^20260113.1457.7",
-		"h3-js": "^4.4.0"
+		"@clickhouse/client": "^1.16.0",
+		"@tmlmobilidade/dates": "^20260121.2332.6",
+		"@tmlmobilidade/interfaces": "^20260121.2332.6",
+		"@tmlmobilidade/logger": "^20260121.2332.6",
+		"@tmlmobilidade/timer": "^20260121.2332.6",
+		"@tmlmobilidade/types": "^20260121.2332.6",
+		"h3-js": "^4.4.0",
+		"ngeohash": "^0.6.3"
 	},
 	"devDependencies": {
 		"@carrismetropolitana/eslint": "20250622.1204.50",
-		"@tmlmobilidade/tsconfig": "^20260105.1950.3",
-		"@types/node": "^25.0.3",
+		"@tmlmobilidade/tsconfig": "^20260121.2332.6",
+		"@types/ngeohash": "^0.6.8",
+		"@types/node": "^25.0.10",
 		"tsx": "^4.21.0",
 		"typescript": "^5.9.3"
 	}
