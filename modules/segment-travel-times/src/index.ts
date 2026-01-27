@@ -6,6 +6,7 @@ import { Logger } from '@tmlmobilidade/logger';
 import { Timer } from '@tmlmobilidade/timer';
 
 import { createDefaultSettings, RUN_INTERVAL } from './config.js';
+import { createAggregationTables } from './lib/clickhouse-aggregations.js';
 import { createClickHouseClient } from './lib/clickhouse-client.js';
 import { createTravelTimesTable, deleteTravelTimesForShapes, saveTravelTimes } from './lib/clickhouse-storage.js';
 import { fetchVehicleEvents } from './lib/geohash-cache.js';
@@ -118,6 +119,9 @@ async function main(): Promise<void> {
 
 		Logger.divider();
 	}
+
+	// Create aggregation tables (pivot hourly data)
+	await createAggregationTables(clickhouseClient);
 
 	Logger.terminate(`Terminated in ${globalTimer.get()}`);
 }
