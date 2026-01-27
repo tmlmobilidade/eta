@@ -16,9 +16,10 @@ export const RUN_INTERVAL = 60_000 * 10;
  */
 export function createDefaultSettings(): SegmentTravelTimesSettings {
 	return {
+		bearingThreshold: 90,
 		geohashPrecision: 7,
 		rideEndDate: Dates.now('Europe/Lisbon').set({ hour: 4, minute: 0, second: 0 }).unix_timestamp,
-		rideStartDate: Dates.now('Europe/Lisbon').minus({ days: 1 }).set({ hour: 4, minute: 0, second: 0 }).unix_timestamp,
+		rideStartDate: Dates.now('Europe/Lisbon').minus({ days: 7 }).set({ hour: 4, minute: 0, second: 0 }).unix_timestamp,
 		segmentLengthMeters: 50,
 	};
 }

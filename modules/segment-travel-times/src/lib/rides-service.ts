@@ -16,6 +16,7 @@ function buildRidesAggregationPipeline(settings: SegmentTravelTimesSettings): Ag
 	return [
 		{ $match: { start_time_scheduled: { $gte: settings.rideStartDate, $lt: settings.rideEndDate } } },
 		{ $match: { agency_id: { $in: ['41', '42', '43', '44'] } } },
+		{ $match: { line_id: { $in: [1001] } } }, // ! DEBUG
 		{
 			$project: {
 				_id: 0,
