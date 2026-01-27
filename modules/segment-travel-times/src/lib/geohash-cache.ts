@@ -18,9 +18,25 @@ function buildVehicleEventsQuery(geohashes: string[], settings: SegmentTravelTim
 	const geohashColumn = `geohash_${settings.geohashPrecision}`;
 	const whereClause = `
 		WHERE created_at >= ${settings.rideStartDate} AND created_at < ${settings.rideEndDate}
+		AND Char_length(trip_id) > 0
 		AND ${geohashColumn} IN ('${geohashes.join('\',\'')}')
 	`;
-	return `SELECT trip_id, ${geohashColumn} as geohash FROM vehicle_events ${whereClause}`;
+	return `
+		SELECT
+			Concat(trip_id, '-', toString(operational_date)) AS trip_operational_id,
+			${geohashColumn} AS geohash,
+			created_at,
+			latitude,
+			longitude
+		FROM vehicle_events 
+		${whereClause} 
+		ORDER BY trip_operational_id, created_at
+		LIMIT 1 BY
+			concat(trip_id, '-', toString(operational_date)),
+			geohash_7,
+			created_at,
+			latitude,
+			longitude;`;
 }
 
 /**

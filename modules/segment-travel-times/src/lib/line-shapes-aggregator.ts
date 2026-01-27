@@ -45,12 +45,7 @@ function addGeohashesFromEndpoints(lineData: LineShapeData, endpoints: Coordinat
  * @param lineShapes - Map to update with line shape data
  * @param settings - Settings containing geohash precision and segment length
  */
-function processRideWithHashedShape(
-	ride: RideProjection,
-	hashedShape: HashedShapePointProjection,
-	lineShapes: LineShapesMap,
-	settings: SegmentTravelTimesSettings,
-): void {
+function processRideWithHashedShape(ride: RideProjection, hashedShape: HashedShapePointProjection, lineShapes: LineShapesMap, settings: SegmentTravelTimesSettings): void {
 	// Process shape into segment endpoints
 	const segmentEndpoints = processShapeToSegmentEndpoints(
 		hashedShape.points,

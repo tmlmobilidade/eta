@@ -13,12 +13,6 @@ import { fetchRidesCursor } from './lib/rides-service.js';
 
 /**
  * Main processing function for segment travel times calculation
- *
- * Workflow:
- * 1. Fetch rides from MongoDB within date range
- * 2. Group shapes by line_id with segment endpoints and geohashes
- * 3. For each line, fetch uncached vehicle events from ClickHouse
- * 4. Aggregate events by trip_id for analysis
  */
 async function main(): Promise<void> {
 	Logger.init();
@@ -28,17 +22,36 @@ async function main(): Promise<void> {
 	const settings = createDefaultSettings();
 	const clickhouseClient = createClickHouseClient();
 
-	// Step 1: Fetch rides cursor
+	/**
+	 * We fetch rides from MongoDB within a data range to know what Shapes were being used in the given period.
+	 * This is the segment data that's going to be used to calculate the travel times.
+	 */
 	const { cursor, totalCount } = await fetchRidesCursor(settings);
-
 	Logger.info(`Found ${totalCount} rides`);
 
-	// Step 2: Aggregate rides into line shapes
+	/**
+	 * Here we are actually fetching the hashed shapes from the database,
+	 * chunking them into segments of the given length,
+	 * and geohashing the coordinates of the endpoints.
+	 *
+	 * We then group them by their line_id so that we don't fetch the same vehicle events for the same line multiple times.
+	 * This could possibly be improved in the future by not fetching the vehicle events for the same geohashe more than once,
+	 * but for now we assume that the vehicle events in the same line are going to be mostly in the same geohashes.
+	 */
 	const { lineShapes } = await aggregateRidesToLineShapes(cursor, settings);
-
-	// Sort lines by ID for consistent processing order
 	const sortedLines = Array.from(lineShapes.entries()).sort(([a], [b]) => a - b);
 
+	/**
+	 * Here we are processing each line, fetching the vehicle events for the geohashes covered by the line,
+	 * We groupe the events by trip_id, sorted by "created_at" to understand what the event sequence is.
+	 *
+	 * This will allow us to calculate the travel times for each segment, by knowing the sequence of events and the time between them.
+	 * - We discard any events that only have one occurrence (trip_id), as they are not useful for the calculation.
+	 * - We calculate the travel time for each segment, by knowing the sequence of events and the time between them and attaching it to the segments.
+	 * - i.e. If the event sequence is [A, B, C, D]
+	 * - A -> D = 10 seconds
+	 * - We assume that each segment is has travel time of 2,5 seconds, we are splitting the 10 seconds evenly across 4 segments of 2,5 seconds each.
+	 */
 	for (const [index, [lineId, { geohashes, hashedShapeIds }]] of sortedLines.entries()) {
 		Logger.title(`[${index + 1}/${sortedLines.length}] | Processing line ${lineId} with ${hashedShapeIds.length} hashed shapes and ${geohashes.size} geohashes`);
 
@@ -46,9 +59,6 @@ async function main(): Promise<void> {
 		const vehicleEvents = await fetchVehicleEvents(clickhouseClient, allGeohashes, settings);
 
 		Logger.info(`Found ${vehicleEvents.length} vehicle events`);
-
-		// // Step 3a: Fetch and cache uncached geohashes
-		// const groupedEvents = aggregateEventsByTripId(allGeohashes, vehicleEvents);
 
 		// console.log(groupedEvents);
 		Logger.divider();

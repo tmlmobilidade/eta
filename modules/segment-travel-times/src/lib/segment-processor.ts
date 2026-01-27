@@ -27,10 +27,7 @@ export function pointsToLineString(points: ShapePoint[]): Feature<LineString> {
  * @param segmentLengthMeters - Desired segment length in meters
  * @returns Array of segment endpoint coordinates
  */
-export function chunkLineAndExtractEndpoints(
-	line: Feature<LineString>,
-	segmentLengthMeters: number,
-): Coordinate[] {
+export function chunkLineAndExtractEndpoints(line: Feature<LineString>, segmentLengthMeters: number): Coordinate[] {
 	const chunks = turf.lineChunk(line, segmentLengthMeters, { units: 'meters' });
 
 	return chunks.features.map((feature) => {
@@ -48,9 +45,7 @@ export function chunkLineAndExtractEndpoints(
  * @param segmentLengthMeters - Desired segment length in meters
  * @returns Array of segment endpoint coordinates
  */
-export function processShapeToSegmentEndpoints(
-	points: ShapePoint[],
-	segmentLengthMeters: number,
+export function processShapeToSegmentEndpoints(points: ShapePoint[], segmentLengthMeters: number,
 ): Coordinate[] {
 	const line = pointsToLineString(points);
 	return chunkLineAndExtractEndpoints(line, segmentLengthMeters);

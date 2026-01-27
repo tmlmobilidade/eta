@@ -15,6 +15,7 @@ import { AggregationPipeline, rides } from '@tmlmobilidade/interfaces';
 function buildRidesAggregationPipeline(settings: SegmentTravelTimesSettings): AggregationPipeline<RideProjection> {
 	return [
 		{ $match: { start_time_scheduled: { $gte: settings.rideStartDate, $lt: settings.rideEndDate } } },
+		{ $match: { agency_id: { $in: ['41', '42', '43', '44'] } } },
 		{
 			$project: {
 				_id: 0,

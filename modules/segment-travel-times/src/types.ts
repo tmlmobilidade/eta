@@ -29,8 +29,12 @@ export type LineShapesMap = Map<number, LineShapeData>;
  * A cached vehicle event with geohash association
  */
 export interface VehicleEvent {
+	created_at: number
 	geohash: string
-	trip_id: string
+	latitude: number
+	longitude: number
+	operational_date: number
+	trip_operational_id: string
 }
 
 /**
@@ -45,7 +49,7 @@ export interface SegmentTravelTimesSettings {
 	/** Geohash precision level (typically 6-8) */
 	geohashPrecision: number
 	/** Unix timestamp for ride query end date */
-	rideEndDate: number
+	rideEndDate: UnixTimestamp
 	/** Unix timestamp for ride query start date */
 	rideStartDate: UnixTimestamp
 	/** Length of each segment in meters */
