@@ -1,4 +1,3 @@
-// Package geo provides geospatial utility functions for bearing, distance, and geohash calculations.
 package geo
 
 import (
