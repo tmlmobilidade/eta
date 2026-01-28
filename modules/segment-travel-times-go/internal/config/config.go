@@ -1,0 +1,139 @@
+// Package config provides configuration loading and management.
+package config
+
+import (
+	"log"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"time"
+
+	"github.com/joho/godotenv"
+	"github.com/tmlmobilidade/segment-travel-times-go/internal/types"
+)
+
+func init() {
+	// Try to load .env file from various locations
+	envPaths := []string{
+		".env",
+		"../../environments/staging/secrets/.env",     // From modules/segment-travel-times-go
+		"../../environments/production/secrets/.env",  // Production secrets
+		"environments/staging/secrets/.env",           // From project root
+		"environments/production/secrets/.env",        // Production from root
+		filepath.Join(os.Getenv("HOME"), ".env"),
+	}
+
+	for _, path := range envPaths {
+		if err := godotenv.Load(path); err == nil {
+			log.Printf("Loaded environment from %s", path)
+			return
+		}
+	}
+
+	// No .env file found, will use environment variables directly
+	log.Println("No .env file found, using environment variables")
+}
+
+// RunInterval is the interval between processing runs (10 minutes).
+const RunInterval = 10 * time.Minute
+
+// Config holds all configuration for the application.
+type Config struct {
+	// ClickHouse configuration
+	ClickHouseHost     string
+	ClickHousePort     int
+	ClickHouseDatabase string
+	ClickHouseUsername string
+	ClickHousePassword string
+	ClickHouseURL      string
+
+	// MongoDB configuration
+	MongoDBURI      string
+	MongoDBDatabase string
+
+	// Processing settings
+	Settings *types.Settings
+}
+
+// getEnv returns the value of an environment variable or a default value.
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// getEnvInt returns the integer value of an environment variable or a default value.
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
+}
+
+// getEnvFloat returns the float value of an environment variable or a default value.
+func getEnvFloat(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
+			return floatValue
+		}
+	}
+	return defaultValue
+}
+
+// LoadConfig loads configuration from environment variables.
+func LoadConfig() *Config {
+	// Calculate date range (last 7 days, starting at 4 AM Lisbon time)
+	location, _ := time.LoadLocation("Europe/Lisbon")
+	now := time.Now().In(location)
+
+	// Set to 4:00 AM today
+	endDate := time.Date(now.Year(), now.Month(), now.Day(), 4, 0, 0, 0, location)
+	// If current time is before 4 AM, use yesterday's 4 AM
+	if now.Before(endDate) {
+		endDate = endDate.AddDate(0, 0, -1)
+	}
+
+	// Start date is 7 days before end date
+	startDate := endDate.AddDate(0, 0, -7)
+
+	// Default worker count is the number of CPUs
+	defaultWorkers := runtime.NumCPU()
+	if defaultWorkers > 8 {
+		defaultWorkers = 8 // Cap at 8 workers by default
+	}
+
+	return &Config{
+		// ClickHouse
+		ClickHouseHost:     getEnv("CLICKHOUSE_HOST", "localhost"),
+		ClickHousePort:     getEnvInt("CLICKHOUSE_PORT", 9000),
+		ClickHouseDatabase: getEnv("CLICKHOUSE_DATABASE", "default"),
+		ClickHouseUsername: getEnv("CLICKHOUSE_USERNAME", "default"),
+		ClickHousePassword: getEnv("CLICKHOUSE_PASSWORD", ""),
+		ClickHouseURL:      getEnv("CLICKHOUSE_URL", ""),
+
+		// MongoDB
+		MongoDBURI:      getEnv("MONGODB_URI", "mongodb://localhost:27017"),
+		MongoDBDatabase: getEnv("MONGODB_DATABASE", "production"),
+
+		// Processing settings
+		Settings: &types.Settings{
+			BearingThreshold:    getEnvFloat("BEARING_THRESHOLD", 90.0),
+			GeohashPrecision:    getEnvInt("GEOHASH_PRECISION", 7),
+			RideEndDate:         endDate.UnixMilli(),
+			RideStartDate:       startDate.UnixMilli(),
+			SegmentLengthMeters: getEnvFloat("SEGMENT_LENGTH_METERS", 50.0),
+			WorkerCount:         getEnvInt("WORKER_COUNT", defaultWorkers),
+		},
+	}
+}
+
+// CreateDefaultSettings creates default settings for segment travel times calculation.
+// This mirrors the TypeScript createDefaultSettings function.
+func CreateDefaultSettings() *types.Settings {
+	cfg := LoadConfig()
+	return cfg.Settings
+}
