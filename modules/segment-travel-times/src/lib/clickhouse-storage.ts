@@ -39,17 +39,8 @@ export async function createTravelTimesTable(client: ClickHouseClient): Promise<
  * @param records - Array of travel time records to insert
  */
 export async function saveTravelTimes(client: ClickHouseClient, records: NodeTravelTimeRecord[]): Promise<void> {
-	if (records.length === 0) {
-		return;
-	}
-
-	await client.insert({
-		format: 'JSONEachRow',
-		table: 'segment_travel_times',
-		values: records,
-	});
-
-	Logger.info(`Saved ${records.length} travel time records to ClickHouse`);
+	if (records.length === 0) return;
+	await client.insert({ format: 'JSONEachRow', table: 'segment_travel_times', values: records });
 }
 
 /**
