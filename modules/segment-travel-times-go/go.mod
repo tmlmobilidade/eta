@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.42.0
 	github.com/fatih/color v1.18.0
+	github.com/mmcloughlin/geohash v0.10.0
 	go.mongodb.org/mongo-driver v1.17.7
 )
 

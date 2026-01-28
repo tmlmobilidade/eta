@@ -1,6 +1,17 @@
 package types
 
 type Coordinate [2]float64
+
+// Longitude returns the longitude component of the coordinate.
+func (c Coordinate) Longitude() float64 {
+	return c[0]
+}
+
+// Latitude returns the latitude component of the coordinate.
+func (c Coordinate) Latitude() float64 {
+	return c[1]
+}
+
 type OperationalDate string // YYYYMMDD
 type UnixTimestamp int64
 
