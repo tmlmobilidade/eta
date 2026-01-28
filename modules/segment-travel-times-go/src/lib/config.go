@@ -113,10 +113,3 @@ func LoadConfig() *Config {
 		},
 	}
 }
-
-// CreateDefaultSettings creates default settings for segment travel times calculation.
-// This mirrors the TypeScript createDefaultSettings function.
-func CreateDefaultSettings() *types.Settings {
-	cfg := LoadConfig()
-	return cfg.Settings
-}
