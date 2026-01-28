@@ -12,6 +12,7 @@ import { ClickHouseClient, createClient } from '@clickhouse/client';
 export function createClickHouseClient(): ClickHouseClient {
 	return createClient({
 		database: process.env.CLICKHOUSE_DATABASE,
+		keep_alive: { enabled: false },
 		password: process.env.CLICKHOUSE_PASSWORD,
 		url: `http://${process.env.CLICKHOUSE_HOST}:${process.env.CLICKHOUSE_PORT}`,
 		username: process.env.CLICKHOUSE_USERNAME,
