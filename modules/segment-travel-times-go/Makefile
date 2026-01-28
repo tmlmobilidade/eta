@@ -5,7 +5,7 @@ BINARY_NAME=segment-travel-times
 
 # Build the binary
 build:
-	go build -o bin/$(BINARY_NAME) ./cmd/processor
+	go build -o bin/$(BINARY_NAME) ./src
 
 # Run the application
 run: build
@@ -13,7 +13,7 @@ run: build
 
 # Run without building
 dev:
-	wgo run ./cmd/processor
+	go run ./src -env ../../environments/staging/secrets/.env
 
 # Clean build artifacts
 clean:
@@ -44,6 +44,6 @@ lint:
 
 # Build for multiple platforms
 build-all:
-	GOOS=linux GOARCH=amd64 go build -o bin/$(BINARY_NAME)-linux-amd64 ./cmd/processor
-	GOOS=darwin GOARCH=amd64 go build -o bin/$(BINARY_NAME)-darwin-amd64 ./cmd/processor
-	GOOS=darwin GOARCH=arm64 go build -o bin/$(BINARY_NAME)-darwin-arm64 ./cmd/processor
+	GOOS=linux GOARCH=amd64 go build -o bin/$(BINARY_NAME)-linux-amd64 ./src
+	GOOS=darwin GOARCH=amd64 go build -o bin/$(BINARY_NAME)-darwin-amd64 ./src
+	GOOS=darwin GOARCH=arm64 go build -o bin/$(BINARY_NAME)-darwin-arm64 ./src

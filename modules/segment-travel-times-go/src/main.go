@@ -1,8 +1,12 @@
 package main
 
-import "main/src/lib"
+import (
+	"fmt"
+	"main/src/lib"
+)
 
 func main() {
-	lib.LoadConfig()
+	config := lib.LoadConfig()
+	fmt.Printf("Config: %+v\n", config.MongoDBURI)
 	
 }

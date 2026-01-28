@@ -28,7 +28,6 @@ type Config struct {
 
 	// MongoDB configuration
 	MongoDBURI      string
-	MongoDBDatabase string
 
 	// Processing settings
 	Settings *types.Settings
@@ -102,7 +101,6 @@ func LoadConfig() *Config {
 
 		// MongoDB
 		MongoDBURI:      getEnv("MONGODB_URI", "mongodb://localhost:27017"),
-		MongoDBDatabase: getEnv("MONGODB_DATABASE", "production"),
 
 		// Processing settings
 		Settings: &types.Settings{
