@@ -2,12 +2,15 @@
 package lib
 
 import (
+	"flag"
 	"os"
 	"runtime"
 	"strconv"
 	"time"
 
 	"main/src/types"
+
+	"github.com/joho/godotenv"
 )
 
 // RunInterval is the interval between processing runs (10 minutes).
@@ -61,6 +64,13 @@ func getEnvFloat(key string, defaultValue float64) float64 {
 
 // LoadConfig loads configuration from environment variables.
 func LoadConfig() *Config {
+	// Load Environment Variable File
+	envFile := flag.String("env", ".env", "Environment variable file")
+	flag.Parse() 
+	if *envFile != "" {
+		godotenv.Load(*envFile)
+	}
+
 	// Calculate date range (last 7 days, starting at 4 AM Lisbon time)
 	location, _ := time.LoadLocation("Europe/Lisbon")
 	now := time.Now().In(location)
