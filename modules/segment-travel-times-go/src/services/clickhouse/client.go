@@ -41,7 +41,7 @@ func NewClickhouseClient(options ClickhouseClientParams) (*ClickhouseService, er
 		ConnMaxLifetime: time.Hour,
 	})
 	if err != nil {
-		return nil, lib.AppLogger.Error("failed to connect to ClickHouse", err.Error())
+		return nil, lib.AppLogger.Error(err, "failed to connect to ClickHouse")
 	}
 
 	// Verify connection
@@ -49,7 +49,7 @@ func NewClickhouseClient(options ClickhouseClientParams) (*ClickhouseService, er
 	defer cancel()
 
 	if err := conn.Ping(ctx); err != nil {
-		return nil, lib.AppLogger.Error("failed to ping ClickHouse", err.Error())
+		return nil, lib.AppLogger.Error(err, "failed to ping ClickHouse")
 	}
 
 	lib.AppLogger.Info("Successfully connected to ClickHouse!")

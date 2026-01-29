@@ -47,7 +47,7 @@ func (s *ClickhouseService) CreateTravelTimesHourlyTable(ctx context.Context) er
 	`, hourColumns)
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to create segment_travel_times_hourly table", err.Error())
+		return lib.AppLogger.Error(err, "failed to create segment_travel_times_hourly table")
 	}
 
 	lib.AppLogger.Info("Created segment_travel_times_hourly table")
@@ -72,7 +72,7 @@ func (s *ClickhouseService) CreateCumulativeTravelTimesTable(ctx context.Context
 	`, hourColumns)
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to create segment_cumulative_times table", err.Error())
+		return lib.AppLogger.Error(err, "failed to create segment_cumulative_times table")
 	}
 
 	lib.AppLogger.Info("Created segment_cumulative_times table")
@@ -97,7 +97,7 @@ func (s *ClickhouseService) CreateRemainingTimeTable(ctx context.Context) error 
 	`, hourColumns)
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to create segment_remaining_times table", err.Error())
+		return lib.AppLogger.Error(err, "failed to create segment_remaining_times table")
 	}
 
 	lib.AppLogger.Info("Created segment_remaining_times table")
@@ -133,7 +133,7 @@ func (s *ClickhouseService) CreateTimePeriodTable(ctx context.Context) error {
 	`
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to create segment_time_periods table", err.Error())
+		return lib.AppLogger.Error(err, "failed to create segment_time_periods table")
 	}
 
 	lib.AppLogger.Info("Created segment_time_periods table")
@@ -163,7 +163,7 @@ func (s *ClickhouseService) CreateShapeStatisticsTable(ctx context.Context) erro
 	`
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to create shape_statistics table", err.Error())
+		return lib.AppLogger.Error(err, "failed to create shape_statistics table")
 	}
 
 	lib.AppLogger.Info("Created shape_statistics table")
@@ -188,7 +188,7 @@ func (s *ClickhouseService) CreateLineStatisticsTable(ctx context.Context) error
 	`
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to create line_statistics table", err.Error())
+		return lib.AppLogger.Error(err, "failed to create line_statistics table")
 	}
 
 	lib.AppLogger.Info("Created line_statistics table")
@@ -257,7 +257,7 @@ func (s *ClickhouseService) PopulateTravelTimesHourly(ctx context.Context) error
 	`, hourColumnNames, hourAggregations)
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to populate segment_travel_times_hourly table", err.Error())
+		return lib.AppLogger.Error(err, "failed to populate segment_travel_times_hourly table")
 	}
 
 	lib.AppLogger.Info("Populated segment_travel_times_hourly table")
@@ -285,7 +285,7 @@ func (s *ClickhouseService) PopulateCumulativeTravelTimes(ctx context.Context) e
 	`, cumulativeColumnNames, cumulativeAggregations)
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to populate segment_cumulative_times table", err.Error())
+		return lib.AppLogger.Error(err, "failed to populate segment_cumulative_times table")
 	}
 
 	lib.AppLogger.Info("Populated segment_cumulative_times table")
@@ -330,7 +330,7 @@ func (s *ClickhouseService) PopulateRemainingTimes(ctx context.Context) error {
 	`, remainingColumnNames, remainingColumns, cumulativeColumnsList, totalColumns)
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to populate segment_remaining_times table", err.Error())
+		return lib.AppLogger.Error(err, "failed to populate segment_remaining_times table")
 	}
 
 	lib.AppLogger.Info("Populated segment_remaining_times table")
@@ -378,7 +378,7 @@ func (s *ClickhouseService) PopulateTimePeriods(ctx context.Context) error {
 	`
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to populate segment_time_periods table", err.Error())
+		return lib.AppLogger.Error(err, "failed to populate segment_time_periods table")
 	}
 
 	lib.AppLogger.Info("Populated segment_time_periods table")
@@ -415,7 +415,7 @@ func (s *ClickhouseService) PopulateShapeStatistics(ctx context.Context) error {
 	`
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to populate shape_statistics table", err.Error())
+		return lib.AppLogger.Error(err, "failed to populate shape_statistics table")
 	}
 
 	lib.AppLogger.Info("Populated shape_statistics table")
@@ -444,7 +444,7 @@ func (s *ClickhouseService) PopulateLineStatistics(ctx context.Context) error {
 	`
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to populate line_statistics table", err.Error())
+		return lib.AppLogger.Error(err, "failed to populate line_statistics table")
 	}
 
 	lib.AppLogger.Info("Populated line_statistics table")
@@ -470,7 +470,7 @@ func (s *ClickhouseService) DropAggregationTables(ctx context.Context) error {
 	for _, table := range aggregationTables {
 		query := fmt.Sprintf("DROP TABLE IF EXISTS %s", table)
 		if err := s.conn.Exec(ctx, query); err != nil {
-			return lib.AppLogger.Error(fmt.Sprintf("failed to drop table %s", table), err.Error())
+			return lib.AppLogger.Error(err, "failed to drop table %s", table)
 		}
 	}
 

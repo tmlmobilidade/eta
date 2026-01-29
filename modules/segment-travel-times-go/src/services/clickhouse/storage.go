@@ -25,7 +25,7 @@ func (s *ClickhouseService) CreateTravelTimesTable(ctx context.Context) error {
 	`
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to create segment_travel_times table", err.Error())
+		return lib.AppLogger.Error(err, "failed to create segment_travel_times table")
 	}
 
 	lib.AppLogger.Info("Created/verified segment_travel_times table")
@@ -40,7 +40,7 @@ func (s *ClickhouseService) SaveTravelTimes(ctx context.Context, records []types
 
 	batch, err := s.conn.PrepareBatch(ctx, "INSERT INTO segment_travel_times")
 	if err != nil {
-		return lib.AppLogger.Error("failed to prepare batch", err.Error())
+		return lib.AppLogger.Error(err, "failed to prepare batch")
 	}
 
 	for _, record := range records {
@@ -54,12 +54,12 @@ func (s *ClickhouseService) SaveTravelTimes(ctx context.Context, records []types
 			record.TravelTimeSeconds,
 			record.SampleCount,
 		); err != nil {
-			return lib.AppLogger.Error("failed to append record to batch", err.Error())
+			return lib.AppLogger.Error(err, "failed to append record to batch")
 		}
 	}
 
 	if err := batch.Send(); err != nil {
-		return lib.AppLogger.Error("failed to send batch", err.Error())
+		return lib.AppLogger.Error(err, "failed to send batch")
 	}
 
 	return nil
@@ -85,7 +85,7 @@ func (s *ClickhouseService) DeleteTravelTimesForShapes(ctx context.Context, line
 	`, lineID, strings.Join(quotedIDs, ","))
 
 	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error("failed to delete travel times for shapes", err.Error())
+		return lib.AppLogger.Error(err, "failed to delete travel times for shapes")
 	}
 
 	lib.AppLogger.Info(fmt.Sprintf("Deleted existing travel time records for line %d with %d shapes", lineID, len(hashedShapeIDs)))

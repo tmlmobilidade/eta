@@ -13,7 +13,7 @@ run: build
 
 # Run without building
 dev:
-	go run ./src -env ../../environments/staging/secrets/.env
+	wgo run ./src/main.go -env ../../environments/staging/secrets/.env -log debug
 
 # Clean build artifacts
 clean:

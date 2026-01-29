@@ -20,18 +20,26 @@ type Flags struct {
 	LogLevel string
 }
 
+type ClickhouseConfig struct {
+	Host     string
+	Port     int
+	Database string
+	Username string
+	Password string
+}
+
+type MongoDBConfig struct {
+	URI string
+	Database string
+}
+
 // Config holds all configuration for the application.
 type Config struct {
 	// ClickHouse configuration
-	ClickHouseHost     string
-	ClickHousePort     int
-	ClickHouseDatabase string
-	ClickHouseUsername string
-	ClickHousePassword string
-	ClickHouseURL      string
+	Clickhouse ClickhouseConfig
 
 	// MongoDB configuration
-	MongoDBURI      string
+	MongoDB MongoDBConfig
 
 	// Processing settings
 	Settings *types.Settings
@@ -113,18 +121,20 @@ func LoadConfig() *Config {
 	}
 
 	return &Config{
-		// ClickHouse
-		ClickHouseHost:     getEnv("CLICKHOUSE_HOST", "localhost"),
-		ClickHousePort:     getEnvInt("CLICKHOUSE_PORT", 9000),
-		ClickHouseDatabase: getEnv("CLICKHOUSE_DATABASE", "default"),
-		ClickHouseUsername: getEnv("CLICKHOUSE_USERNAME", "default"),
-		ClickHousePassword: getEnv("CLICKHOUSE_PASSWORD", ""),
-		ClickHouseURL:      getEnv("CLICKHOUSE_URL", ""),
 
-		// MongoDB
-		MongoDBURI:      getEnv("MONGODB_URI", "mongodb://localhost:27017"),
+		Clickhouse: ClickhouseConfig{
+			Host:     getEnv("CLICKHOUSE_HOST", "localhost"),
+			Port:     getEnvInt("CLICKHOUSE_PORT", 9000),
+			Database: getEnv("CLICKHOUSE_DATABASE", "default"),
+			Username: getEnv("CLICKHOUSE_USERNAME", "default"),
+			Password: getEnv("CLICKHOUSE_PASSWORD", ""),
+		},
 
-		// Processing settings
+		MongoDB: MongoDBConfig{
+			URI:      getEnv("MONGODB_URI", "mongodb://localhost:27017"),
+			Database: getEnv("MONGODB_DATABASE", "production"),
+		},
+
 		Settings: &types.Settings{
 			BearingThreshold:    getEnvFloat("BEARING_THRESHOLD", 90.0),
 			GeohashPrecision:    getEnvInt("GEOHASH_PRECISION", 7),

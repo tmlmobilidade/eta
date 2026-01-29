@@ -164,20 +164,16 @@ func (l *Logger) Spacer(lines ...int) {
 }
 
 // Divider prints a nice divider, with optional centered text
-func (l *Logger) Divider(message ...string) {
+func (l *Logger) Divider(format string, a ...any) {
 	const width = 75
 
 	fmt.Println()
-	if len(message) == 0 || message[0] == "" {
-		fmt.Println(strings.Repeat("-", width))
-	} else {
-		msg := message[0]
-		remaining := width - 2 - len(msg)
-		if remaining < 1 {
-			remaining = 1
-		}
-		fmt.Printf("- %s %s\n", msg, strings.Repeat("-", remaining))
+	msg := fmt.Sprintf(format, a...)
+	remaining := width - 2 - len(msg)
+	if remaining < 1 {
+		remaining = 1
 	}
+	fmt.Printf("- %s %s\n", msg, strings.Repeat("-", remaining))
 	fmt.Println()
 }
 
@@ -212,8 +208,8 @@ func (l *Logger) Terminate(message string) {
 }
 
 // Success logs a success message
-func (l *Logger) Success(message ...string) {
-	msg := strings.Join(message, " ")
+func (l *Logger) Success(format string, a ...any) {
+	msg := fmt.Sprintf(format, a...)
 	colorSuccess.Printf("✓ %s\n", msg)
 }
 
@@ -223,8 +219,8 @@ func (l *Logger) SuccessColumns(columns []Column) {
 }
 
 // Progress logs a progress message
-func (l *Logger) Progress(message ...string) {
-	msg := strings.Join(message, " ")
+func (l *Logger) Progress(format string, a ...any) {
+	msg := fmt.Sprintf(format, a...)
 	colorInfo.Printf("• %s\n", msg)
 }
 
@@ -234,18 +230,18 @@ func (l *Logger) ProgressColumns(columns []Column) {
 }
 
 // Trace logs a trace-level message (most verbose)
-func (l *Logger) Trace(message ...string) {
-	l.log(Trace, strings.Join(message, " "))
+func (l *Logger) Trace(format string, a ...any) {
+	l.log(Trace, fmt.Sprintf(format, a...))
 }
 
 // Debug logs a debug-level message
-func (l *Logger) Debug(message ...string) {
-	l.log(Debug, strings.Join(message, " "))
+func (l *Logger) Debug(format string, a ...any) {
+	l.log(Debug, fmt.Sprintf(format, a...))
 }
 
 // Info logs an info-level message
-func (l *Logger) Info(message ...string) {
-	l.log(Info, strings.Join(message, " "))
+func (l *Logger) Info(format string, a ...any) {
+	l.log(Info, fmt.Sprintf(format, a...))
 }
 
 // InfoColumns logs an info message with formatted columns
@@ -254,13 +250,13 @@ func (l *Logger) InfoColumns(columns []Column) {
 }
 
 // Warn logs a warning-level message
-func (l *Logger) Warn(message ...string) {
-	l.log(Warn, strings.Join(message, " "))
+func (l *Logger) Warn(format string, a ...any) {
+	l.log(Warn, fmt.Sprintf(format, a...))
 }
 
 // Error logs an error-level message (always visible) and returns an error
-func (l *Logger) Error(message ...string) error {
-	msg := strings.Join(message, " ")
+func (l *Logger) Error(err error, format string, a ...any) error {
+	msg := fmt.Sprintf(format, a...)
 	l.log(Error, msg)
 	return errors.New(msg)
 }
@@ -277,8 +273,8 @@ func (l *Logger) Errorf(message string, err error) error {
 }
 
 // Fatal logs a fatal error message, returns an error, and exits (always visible)
-func (l *Logger) Fatal(message ...string) error {
-	msg := strings.Join(message, " ")
+func (l *Logger) Fatal(format string, a ...any) error {
+	msg := fmt.Sprintf(format, a...)
 	l.log(Fatal, msg)
 	err := errors.New(msg)
 	os.Exit(1)
@@ -286,20 +282,20 @@ func (l *Logger) Fatal(message ...string) error {
 }
 
 // Fatalf logs a formatted fatal error with an error value, returns the error, and exits (always visible)
-func (l *Logger) Fatalf(message ...string) error {
+func (l *Logger) Fatalf(format string, a ...any) error {
 	var resultErr error
-	l.log(Fatal, strings.Join(message, " "))
-	resultErr = errors.New(strings.Join(message, " "))
+	l.log(Fatal, fmt.Sprintf(format, a...))
+	resultErr = errors.New(fmt.Sprintf(format, a...))
 	os.Exit(1)
 	return resultErr // unreachable, but satisfies return type
 }
 
 // Accent logs a message with accent color at Info level
-func (l *Logger) Accent(message ...string) {
+func (l *Logger) Accent(format string, a ...any) {
 	if !l.shouldLog(Info) {
 		return
 	}
-	msg := strings.Join(message, " ")
+	msg := fmt.Sprintf(format, a...)
 	colorAccent.Println(msg)
 }
 
