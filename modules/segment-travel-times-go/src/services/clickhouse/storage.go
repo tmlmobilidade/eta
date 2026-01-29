@@ -91,3 +91,67 @@ func (s *ClickhouseService) DeleteTravelTimesForShapes(ctx context.Context, line
 	lib.AppLogger.Info(fmt.Sprintf("Deleted existing travel time records for line %d with %d shapes", lineID, len(hashedShapeIDs)))
 	return nil
 }
+
+// FetchVehicleEvents fetches vehicle events from ClickHouse for the given geohashes.
+// Events are filtered by date range and grouped by trip_operational_id.
+func (s *ClickhouseService) FetchVehicleEvents(ctx context.Context, geohashes []string, settings *types.Settings) ([]types.VehicleEvent, error) {
+	if len(geohashes) == 0 {
+		return nil, nil
+	}
+
+	// Build the geohash column name based on precision
+	geohashColumn := fmt.Sprintf("geohash_%d", settings.GeohashPrecision)
+
+	// Build the IN clause with quoted strings
+	quotedGeohashes := make([]string, len(geohashes))
+	for i, gh := range geohashes {
+		quotedGeohashes[i] = fmt.Sprintf("'%s'", gh)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			Concat(trip_id, '-', toString(operational_date)) AS trip_operational_id,
+			%s AS geohash,
+			created_at,
+			latitude,
+			longitude
+		FROM vehicle_events 
+		WHERE created_at >= %d AND created_at < %d
+		AND Char_length(trip_id) > 0
+		AND %s IN (%s)
+		ORDER BY trip_operational_id, created_at
+		LIMIT 1 BY
+			concat(trip_id, '-', toString(operational_date)),
+			geohash_7,
+			created_at,
+			latitude,
+			longitude
+	`, geohashColumn, settings.RideStartDate, settings.RideEndDate, geohashColumn, strings.Join(quotedGeohashes, ","))
+
+	rows, err := s.conn.Query(ctx, query)
+	if err != nil {
+		return nil, lib.AppLogger.Error(err, "failed to fetch vehicle events")
+	}
+	defer rows.Close()
+
+	var events []types.VehicleEvent
+	for rows.Next() {
+		var event types.VehicleEvent
+		if err := rows.Scan(
+			&event.TripOperationalID,
+			&event.Geohash,
+			&event.CreatedAt,
+			&event.Latitude,
+			&event.Longitude,
+		); err != nil {
+			return nil, lib.AppLogger.Error(err, "failed to scan vehicle event")
+		}
+		events = append(events, event)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, lib.AppLogger.Error(err, "error iterating vehicle events")
+	}
+
+	return events, nil
+}

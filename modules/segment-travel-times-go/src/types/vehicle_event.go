@@ -1,10 +1,10 @@
 package types
 
+// VehicleEvent represents a vehicle position event from ClickHouse.
 type VehicleEvent struct {
-	createdAt int64 `bson:"created_at"`
-	geohash string `bson:"geohash"`
-	latitude float64 `bson:"latitude"`
-	longitude float64 `bson:"longitude"`
-	operationalDate OperationalDate `bson:"operational_date"`
-	tripOperationalID string `bson:"trip_operational_id"`
+	TripOperationalID string  `ch:"trip_operational_id"`
+	Geohash           string  `ch:"geohash"`
+	CreatedAt         int64   `ch:"created_at"`
+	Latitude          float64 `ch:"latitude"`
+	Longitude         float64 `ch:"longitude"`
 }

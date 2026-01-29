@@ -105,10 +105,7 @@ func LoadConfig() *Config {
 	startDate := endDate.AddDate(0, 0, -7)
 
 	// Default worker count is the number of CPUs
-	defaultWorkers := runtime.NumCPU()
-	if defaultWorkers > 8 {
-		defaultWorkers = 8 // Cap at 8 workers by default
-	}
+	defaultWorkers := min(runtime.NumCPU(), 8)
 
 	return &Config{
 
