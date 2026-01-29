@@ -72,7 +72,7 @@ func loadFlags() *Flags {
 	flags := &Flags{}
 
 	flag.StringVar(&flags.EnvFile, "env", ".env", "Environment variable file")
-	flag.StringVar(&flags.LogLevel, "log-level", "info", "Logging level")
+	flag.StringVar(&flags.LogLevel, "log", "info", "Logging level")
 
 	flag.Parse()
 
