@@ -1,5 +1,14 @@
 package types
 
+// ClickhouseClientParams contains the configuration for connecting to ClickHouse.
+type ClickhouseClientParams struct {
+	Host     string
+	Port     int
+	Database string
+	Username string
+	Password string
+}
+
 // NodeTravelTimeRecord represents a travel time record for ClickHouse storage.
 type NodeTravelTimeRecord struct {
 	LineID            uint32  `ch:"line_id"`

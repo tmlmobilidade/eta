@@ -15,7 +15,7 @@ type MongoService struct {
 }
 
 // CreateMongoClient creates a new MongoDB client
-func NewMongoClient(uri string) (*MongoService, error) {
+func NewMongoClient(uri string, database string) (*MongoService, error) {
 	// Set timeout for the connection
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -26,17 +26,17 @@ func NewMongoClient(uri string) (*MongoService, error) {
 	// Create a new MongoDB client
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		return nil, lib.AppLogger.Error("failed to connect to MongoDB", err.Error())
+		return nil, lib.AppLogger.Error(err, "failed to connect to MongoDB")
 	}
 
 	// Ping the database to verify connection
 	if err := client.Ping(ctx, nil); err != nil {
-		return nil, lib.AppLogger.Error("failed to ping MongoDB", err.Error())
+		return nil, lib.AppLogger.Error(err, "failed to ping MongoDB")
 	}
 
 	lib.AppLogger.Info("Successfully connected to MongoDB!")
 
-	return &MongoService{ client: client, database: client.Database("production") }, nil
+	return &MongoService{ client: client, database: client.Database(database) }, nil
 }
 
 func (s *MongoService) Close(ctx context.Context) error {

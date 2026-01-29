@@ -28,7 +28,7 @@ func (s *MongoService) FetchHashedShapesByIDs(ctx context.Context, hashedShapeID
 	// Get the cursor
 	cursor, err := collection.Find(ctx, filter, opts)
 	if err != nil {
-		return nil, lib.AppLogger.Error("failed to find hashed shapes", err.Error())
+		return nil, lib.AppLogger.Error(err, "failed to find hashed shapes")
 	}
 	defer cursor.Close(ctx)
 	
@@ -38,13 +38,13 @@ func (s *MongoService) FetchHashedShapesByIDs(ctx context.Context, hashedShapeID
 	for cursor.Next(ctx) {
 		var shape types.HashedShapePointProjection
 		if err := cursor.Decode(&shape); err != nil {
-			return nil, lib.AppLogger.Error("failed to decode hashed shape", err.Error())
+			return nil, lib.AppLogger.Error(err, "failed to decode hashed shape")
 		}
 		hashedShapes[shape.ID] = shape
 	}
 	
 	if err := cursor.Err(); err != nil {
-		return nil, lib.AppLogger.Error("cursor error", err.Error())
+		return nil, lib.AppLogger.Error(err, "cursor error")
 	}
 
 	//

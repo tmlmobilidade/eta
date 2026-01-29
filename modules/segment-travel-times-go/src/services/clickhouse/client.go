@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"main/src/lib"
+	"main/src/types"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -14,17 +15,8 @@ type ClickhouseService struct {
 	conn clickhouse.Conn
 }
 
-// ClickhouseClientParams contains the configuration for connecting to ClickHouse.
-type ClickhouseClientParams struct {
-	Host     string
-	Port     int
-	Database string
-	Username string
-	Password string
-}
-
 // NewClickhouseClient creates a new ClickHouse client and returns a ClickhouseService.
-func NewClickhouseClient(options ClickhouseClientParams) (*ClickhouseService, error) {
+func NewClickhouseClient(options types.ClickhouseClientParams) (*ClickhouseService, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{fmt.Sprintf("%s:%d", options.Host, options.Port)},
 		Auth: clickhouse.Auth{

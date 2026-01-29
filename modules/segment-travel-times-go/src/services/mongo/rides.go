@@ -17,7 +17,7 @@ func (s *MongoService) RidesCursor(ctx context.Context, settings *types.Settings
 	// Count with same filter used in aggregation
 	totalCount, err := collection.CountDocuments(ctx, matchFilter)
 	if err != nil {
-		return nil, 0, lib.AppLogger.Error("failed to count rides", err.Error())
+		return nil, 0, lib.AppLogger.Error(err, "failed to count rides")
 	}
 
 	// Early return if no documents
@@ -31,7 +31,7 @@ func (s *MongoService) RidesCursor(ctx context.Context, settings *types.Settings
 
 	cursor, err := collection.Aggregate(ctx, pipeline, opts)
 	if err != nil {
-		return nil, 0, lib.AppLogger.Error("failed to aggregate rides", err.Error())
+		return nil, 0, lib.AppLogger.Error(err, "failed to aggregate rides")
 	}
 
 	return cursor, totalCount, nil

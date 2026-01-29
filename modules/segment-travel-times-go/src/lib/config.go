@@ -20,14 +20,6 @@ type Flags struct {
 	LogLevel string
 }
 
-type ClickhouseConfig struct {
-	Host     string
-	Port     int
-	Database string
-	Username string
-	Password string
-}
-
 type MongoDBConfig struct {
 	URI string
 	Database string
@@ -36,7 +28,7 @@ type MongoDBConfig struct {
 // Config holds all configuration for the application.
 type Config struct {
 	// ClickHouse configuration
-	Clickhouse ClickhouseConfig
+	Clickhouse types.ClickhouseClientParams
 
 	// MongoDB configuration
 	MongoDB MongoDBConfig
@@ -122,7 +114,7 @@ func LoadConfig() *Config {
 
 	return &Config{
 
-		Clickhouse: ClickhouseConfig{
+		Clickhouse: types.ClickhouseClientParams{
 			Host:     getEnv("CLICKHOUSE_HOST", "localhost"),
 			Port:     getEnvInt("CLICKHOUSE_PORT", 9000),
 			Database: getEnv("CLICKHOUSE_DATABASE", "default"),
