@@ -1,4 +1,3 @@
-// Package config provides configuration loading and management.
 package lib
 
 import (
@@ -16,6 +15,11 @@ import (
 // RunInterval is the interval between processing runs (10 minutes).
 const RunInterval = 10 * time.Minute
 
+type Flags struct {
+	EnvFile string
+	LogLevel string
+}
+
 // Config holds all configuration for the application.
 type Config struct {
 	// ClickHouse configuration
@@ -31,6 +35,9 @@ type Config struct {
 
 	// Processing settings
 	Settings *types.Settings
+
+	// Logging configuration
+	LogLevel string
 }
 
 // getEnv returns the value of an environment variable or a default value.
@@ -61,14 +68,29 @@ func getEnvFloat(key string, defaultValue float64) float64 {
 	return defaultValue
 }
 
+func loadFlags() *Flags {
+	flags := &Flags{}
+
+	flag.StringVar(&flags.EnvFile, "env", ".env", "Environment variable file")
+	flag.StringVar(&flags.LogLevel, "log-level", "info", "Logging level")
+
+	flag.Parse()
+
+	return flags
+}
+
 // LoadConfig loads configuration from environment variables.
 func LoadConfig() *Config {
 	// Load Environment Variable File
-	envFile := flag.String("env", ".env", "Environment variable file")
-	flag.Parse() 
-	if *envFile != "" {
-		godotenv.Load(*envFile)
+	flags := loadFlags()
+	if flags.EnvFile != "" {
+		err := godotenv.Load(flags.EnvFile)
+		if err != nil {
+			AppLogger.Fatalf("Error loading environment variables from file %s: %v", flags.EnvFile, err.Error())
+		}
 	}
+
+	AppLogger.SetLogLevel(flags.LogLevel)
 
 	// Calculate date range (last 7 days, starting at 4 AM Lisbon time)
 	location, _ := time.LoadLocation("Europe/Lisbon")

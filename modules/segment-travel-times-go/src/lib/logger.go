@@ -286,16 +286,10 @@ func (l *Logger) Fatal(message ...string) error {
 }
 
 // Fatalf logs a formatted fatal error with an error value, returns the error, and exits (always visible)
-func (l *Logger) Fatalf(message string, err error) error {
+func (l *Logger) Fatalf(message ...string) error {
 	var resultErr error
-	if err != nil {
-		msg := fmt.Sprintf("%s: %v", message, err)
-		l.log(Fatal, msg)
-		resultErr = fmt.Errorf("%s: %w", message, err)
-	} else {
-		l.log(Fatal, message)
-		resultErr = errors.New(message)
-	}
+	l.log(Fatal, strings.Join(message, " "))
+	resultErr = errors.New(strings.Join(message, " "))
 	os.Exit(1)
 	return resultErr // unreachable, but satisfies return type
 }
