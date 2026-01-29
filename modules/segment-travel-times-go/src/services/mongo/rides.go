@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"main/src/lib"
+	"main/src/lib/geo"
 	"main/src/types"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -79,4 +80,119 @@ func buildRidesMatchFilter(settings *types.Settings) bson.M {
 		},
 		"agency_id": bson.M{"$in": defaultAgencyIDs},
 	}
+}
+
+// createEmptyLineShapeData creates an empty LineShapeData structure.
+func createEmptyLineShapeData() *types.LineShapeData {
+	return &types.LineShapeData{
+		Geohashes:      make(map[string]struct{}),
+		HashedShapeIDs: []string{},
+		Nodes:          make(map[string][]types.Coordinate),
+	}
+}
+
+// addGeohashesFromEndpoints encodes segment endpoints to geohashes and adds them to the line data.
+func addGeohashesFromEndpoints(lineData *types.LineShapeData, endpoints []types.Coordinate, geohashPrecision int) {
+	for _, endpoint := range endpoints {
+		hash := geo.EncodeCoordinate(endpoint, uint(geohashPrecision))
+		lineData.Geohashes[hash] = struct{}{}
+	}
+}
+
+// shapePointsToCoordinates converts ShapePoint slice to Coordinate slice.
+func shapePointsToCoordinates(points []types.ShapePoint) []types.Coordinate {
+	coords := make([]types.Coordinate, len(points))
+	for i, point := range points {
+		coords[i] = types.Coordinate{point.Lon, point.Lat}
+	}
+	return coords
+}
+
+// processRideWithHashedShape processes a single ride using pre-fetched hashed shape data.
+func processRideWithHashedShape(ride *types.Ride, hashedShape types.HashedShapePointProjection, lineShapes types.LineShapesMap, settings *types.Settings) {
+	// Convert ShapePoint[] to Coordinate[]
+	coords := shapePointsToCoordinates(hashedShape.Points)
+	
+	// Process shape into segment endpoints
+	segmentEndpoints := geo.ChunkLineIntoSegments(coords, settings.SegmentLengthMeters)
+
+	// Get or create line data entry
+	lineData, exists := lineShapes[ride.LineID]
+	if !exists {
+		lineData = createEmptyLineShapeData()
+		lineShapes[ride.LineID] = lineData
+	}
+
+	// Update line data
+	lineData.HashedShapeIDs = append(lineData.HashedShapeIDs, ride.HashedShapeID)
+	lineData.Nodes[ride.HashedShapeID] = segmentEndpoints
+	addGeohashesFromEndpoints(lineData, segmentEndpoints, settings.GeohashPrecision)
+}
+
+// AggregateRidesToLineShapes aggregates all rides into line shapes map.
+// Processes rides cursor and groups shapes by line_id.
+// Optimized to batch fetch all hashed shapes in a single database call.
+//
+// Returns the line shapes map and count of processed shapes.
+func (s *MongoService) AggregateRidesToLineShapes(ctx context.Context, cursor *mongo.Cursor, settings *types.Settings) (types.LineShapesMap, int, error) {
+	// Step 1: Collect all rides and unique hashed_shape_ids
+	var rides []*types.Ride
+	uniqueHashedShapeIDs := make(map[string]struct{})
+
+	count := 0
+	for cursor.Next(ctx) {
+		var ride types.Ride
+		if err := cursor.Decode(&ride); err != nil {
+			cursor.Close(ctx)
+			return nil, 0, lib.AppLogger.Error(err, "failed to decode ride")
+		}
+		rides = append(rides, &ride)
+		uniqueHashedShapeIDs[ride.HashedShapeID] = struct{}{}
+		count++
+		if count % 1000 == 0 {
+			lib.AppLogger.Debug("Collected %d rides with %d unique hashed shapes", count, len(uniqueHashedShapeIDs))
+		}
+	}
+
+	if err := cursor.Err(); err != nil {
+		cursor.Close(ctx)
+		return nil, 0, lib.AppLogger.Error(err, "cursor error")
+	}
+	cursor.Close(ctx)
+
+	lib.AppLogger.Debug("Collected %d rides with %d unique hashed shapes", len(rides), len(uniqueHashedShapeIDs))
+
+	// Step 2: Batch fetch all hashed shapes in a single database call
+	hashedShapeIDList := make([]string, 0, len(uniqueHashedShapeIDs))
+	for id := range uniqueHashedShapeIDs {
+		hashedShapeIDList = append(hashedShapeIDList, id)
+	}
+
+	hashedShapesMap, err := s.FetchHashedShapesByIDs(ctx, hashedShapeIDList)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	lib.AppLogger.Debug("Fetched %d hashed shapes from database", len(hashedShapesMap))
+
+	// Step 3: Process rides using pre-fetched hashed shapes
+	processedHashedShapeIDs := make(map[string]struct{})
+	lineShapes := make(types.LineShapesMap)
+
+	for _, ride := range rides {
+		// Skip if this hashed_shape_id was already processed
+		if _, alreadyProcessed := processedHashedShapeIDs[ride.HashedShapeID]; alreadyProcessed {
+			continue
+		}
+
+		hashedShape, exists := hashedShapesMap[ride.HashedShapeID]
+		if !exists {
+			continue
+		}
+
+		processedHashedShapeIDs[ride.HashedShapeID] = struct{}{}
+		processRideWithHashedShape(ride, hashedShape, lineShapes, settings)
+	}
+
+	return lineShapes, len(processedHashedShapeIDs), nil
 }

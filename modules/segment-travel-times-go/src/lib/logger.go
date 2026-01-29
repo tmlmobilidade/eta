@@ -257,7 +257,7 @@ func (l *Logger) Warn(format string, a ...any) {
 // Error logs an error-level message (always visible) and returns an error
 func (l *Logger) Error(err error, format string, a ...any) error {
 	msg := fmt.Sprintf(format, a...)
-	l.log(Error, msg)
+	l.log(Error, fmt.Sprintf("%s: %v", msg, err))
 	return errors.New(msg)
 }
 

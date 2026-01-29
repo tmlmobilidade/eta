@@ -90,8 +90,6 @@ func LoadConfig() *Config {
 		}
 	}
 
-	AppLogger.SetLogLevel(flags.LogLevel)
-
 	// Calculate date range (last 7 days, starting at 4 AM Lisbon time)
 	location, _ := time.LoadLocation("Europe/Lisbon")
 	now := time.Now().In(location)
@@ -135,5 +133,7 @@ func LoadConfig() *Config {
 			SegmentLengthMeters: getEnvFloat("SEGMENT_LENGTH_METERS", 50.0),
 			WorkerCount:         getEnvInt("WORKER_COUNT", defaultWorkers),
 		},
+
+		LogLevel: flags.LogLevel,
 	}
 }
