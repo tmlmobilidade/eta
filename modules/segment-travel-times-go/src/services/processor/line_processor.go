@@ -61,8 +61,8 @@ func (lp *LineProcessor) ProcessAllLines(ctx context.Context, lineShapes types.L
 
 	lib.AppLogger.Title(fmt.Sprintf("Processing %d lines with %d workers", totalLines, lp.settings.WorkerCount))
 
-	// Create progress bar
-	progressBar := lib.AppLogger.NewProgressBar(totalLines, "Processing lines")
+	// Create worker display
+	display := lib.NewWorkerDisplay(lp.settings.WorkerCount, totalLines)
 
 	// Create channels for job distribution and result collection
 	jobs := make(chan lineJob, totalLines)
@@ -72,7 +72,7 @@ func (lp *LineProcessor) ProcessAllLines(ctx context.Context, lineShapes types.L
 	var wg sync.WaitGroup
 	for w := 0; w < lp.settings.WorkerCount; w++ {
 		wg.Add(1)
-		go lp.worker(ctx, jobs, results, &wg, totalLines)
+		go lp.worker(ctx, w, jobs, results, &wg, display)
 	}
 
 	// Submit all jobs
@@ -96,21 +96,18 @@ func (lp *LineProcessor) ProcessAllLines(ctx context.Context, lineShapes types.L
 	var firstError error
 
 	for result := range results {
-		// Update progress bar
-		if progressBar != nil {
-			progressBar.Add()
-		}
-
 		if result.err != nil {
 			if firstError == nil {
 				firstError = result.err
 			}
+			display.LineErrored()
 			lib.AppLogger.Error(result.err, "Failed to process line %d", result.lineID)
 			continue
 		}
 
 		if result.skipped {
 			skippedLines++
+			display.LineSkipped()
 			continue
 		}
 
@@ -121,18 +118,18 @@ func (lp *LineProcessor) ProcessAllLines(ctx context.Context, lineShapes types.L
 				if firstError == nil {
 					firstError = err
 				}
+				display.LineErrored()
 				continue
 			}
 			totalRecords += len(result.records)
 		}
 
 		processedLines++
+		display.LineCompleted(len(result.records))
 	}
 
-	// Finish progress bar
-	if progressBar != nil {
-		progressBar.Finish()
-	}
+	// Stop display
+	display.Stop()
 
 	lib.AppLogger.Success(
 		"Processing complete: %d lines processed, %d skipped, %d total records saved",
@@ -161,25 +158,24 @@ func (lp *LineProcessor) sortLines(lineShapes types.LineShapesMap) []sortedLine 
 }
 
 // worker processes jobs from the jobs channel and sends results to the results channel.
-func (lp *LineProcessor) worker(ctx context.Context, jobs <-chan lineJob, results chan<- lineResult, wg *sync.WaitGroup, totalLines int) {
-	// Defer the wait group done to ensure that the worker is marked as done
-	// when the function returns.
+func (lp *LineProcessor) worker(ctx context.Context, workerID int, jobs <-chan lineJob, results chan<- lineResult, wg *sync.WaitGroup, display *lib.WorkerDisplay) {
 	defer wg.Done()
+	defer display.IdleWorker(workerID)
 
-	// Process each job from the jobs channel.
 	for job := range jobs {
-		result := lp.processLineJob(ctx, job, totalLines)
+		result := lp.processLineJob(ctx, job, workerID, display)
 		results <- result
 	}
 }
 
 // processLineJob processes a single line job and returns the result.
-func (lp *LineProcessor) processLineJob(ctx context.Context, job lineJob, totalLines int) lineResult {
+func (lp *LineProcessor) processLineJob(ctx context.Context, job lineJob, workerID int, display *lib.WorkerDisplay) lineResult {
 	lineID := job.lineID
 	lineData := job.lineData
 
-	lib.AppLogger.Debug("Processing line %d with %d shapes and %d geohashes",
-		lineID, len(lineData.HashedShapeIDs), len(lineData.Geohashes))
+	// Update display: fetching events
+	display.UpdateWorker(workerID, lineID,
+		fmt.Sprintf("Fetching events (%d geohashes)", len(lineData.Geohashes)))
 
 	// Fetch vehicle events for this line's geohashes
 	vehicleEvents, err := lp.fetchAndPrepareVehicleEvents(ctx, lineID, lineData)
@@ -188,7 +184,6 @@ func (lp *LineProcessor) processLineJob(ctx context.Context, job lineJob, totalL
 	}
 
 	if vehicleEvents == nil {
-		lib.AppLogger.Debug("No vehicle events found for line %d, skipping", lineID)
 		return lineResult{
 			index:      job.index,
 			lineID:     lineID,
@@ -197,12 +192,13 @@ func (lp *LineProcessor) processLineJob(ctx context.Context, job lineJob, totalL
 		}
 	}
 
-	lib.AppLogger.Debug("Found %d vehicle events for line %d", len(vehicleEvents), lineID)
+	// Update display: processing
+	display.UpdateWorker(workerID, lineID,
+		fmt.Sprintf("Processing %s events (%d shapes)",
+			lib.FormatCount(len(vehicleEvents)), len(lineData.HashedShapeIDs)))
 
 	// Process the line
 	records := lp.processLine(vehicleEvents, lineID, lineData)
-
-	lib.AppLogger.Debug("Generated %d travel time records for line %d", len(records), lineID)
 
 	return lineResult{
 		index:   job.index,

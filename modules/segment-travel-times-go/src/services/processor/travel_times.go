@@ -56,7 +56,7 @@ func (lp *LineProcessor) processLine(vehicleEvents []types.VehicleEvent, lineID 
 		}
 	}
 
-	lib.AppLogger.Info("Processed %d/%d shapes with %d total samples",
+	lib.AppLogger.Debug("Processed %d/%d shapes with %d total samples",
 		processedShapes, len(lineData.HashedShapeIDs), totalSamples)
 
 	return allRecords

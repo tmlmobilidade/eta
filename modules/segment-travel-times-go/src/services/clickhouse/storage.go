@@ -88,7 +88,7 @@ func (s *ClickhouseService) DeleteTravelTimesForShapes(ctx context.Context, line
 		return lib.AppLogger.Error(err, "failed to delete travel times for shapes")
 	}
 
-	lib.AppLogger.Info(fmt.Sprintf("Deleted existing travel time records for line %d with %d shapes", lineID, len(hashedShapeIDs)))
+	lib.AppLogger.Debug("Deleted existing travel time records for line %d with %d shapes", lineID, len(hashedShapeIDs))
 	return nil
 }
 
