@@ -14,7 +14,7 @@ import (
 // generateHourColumns generates column definitions for hours 0-23 with a given prefix and type.
 func generateHourColumns(prefix string, dataType string) string {
 	columns := make([]string, 24)
-	for i := 0; i < 24; i++ {
+	for i := range 24 {
 		columns[i] = fmt.Sprintf("%s%d %s", prefix, i, dataType)
 	}
 	return strings.Join(columns, ",\n\t\t\t")
@@ -23,7 +23,7 @@ func generateHourColumns(prefix string, dataType string) string {
 // generateHourColumnNames generates column names for hours 0-23 with a given prefix.
 func generateHourColumnNames(prefix string) string {
 	columns := make([]string, 24)
-	for i := 0; i < 24; i++ {
+	for i := range 24 {
 		columns[i] = fmt.Sprintf("%s%d", prefix, i)
 	}
 	return strings.Join(columns, ",\n\t\t\t")
@@ -202,7 +202,7 @@ func (s *ClickhouseService) CreateLineStatisticsTable(ctx context.Context) error
 // generateHourAggregations generates avgIf aggregations for hours 0-23.
 func generateHourAggregations() string {
 	aggregations := make([]string, 24)
-	for i := 0; i < 24; i++ {
+	for i := range 24 {
 		aggregations[i] = fmt.Sprintf("avgIf(travel_time_seconds, hour = %d) as h%d", i, i)
 	}
 	return strings.Join(aggregations, ",\n\t\t\t")
@@ -211,7 +211,7 @@ func generateHourAggregations() string {
 // generateCumulativeAggregations generates cumulative sum window functions for hours 0-23.
 func generateCumulativeAggregations() string {
 	aggregations := make([]string, 24)
-	for i := 0; i < 24; i++ {
+	for i := range 24 {
 		aggregations[i] = fmt.Sprintf("sum(h%d) OVER (PARTITION BY hashed_shape_id ORDER BY node_index) as cumulative_h%d", i, i)
 	}
 	return strings.Join(aggregations, ",\n\t\t\t")
@@ -220,7 +220,7 @@ func generateCumulativeAggregations() string {
 // generateTotalColumns generates max window functions for cumulative columns.
 func generateTotalColumns() string {
 	columns := make([]string, 24)
-	for i := 0; i < 24; i++ {
+	for i := range 24 {
 		columns[i] = fmt.Sprintf("max(cumulative_h%d) OVER (PARTITION BY hashed_shape_id) as total_h%d", i, i)
 	}
 	return strings.Join(columns, ",\n\t\t\t")
@@ -229,7 +229,7 @@ func generateTotalColumns() string {
 // generateRemainingColumns generates remaining time calculations.
 func generateRemainingColumns() string {
 	columns := make([]string, 24)
-	for i := 0; i < 24; i++ {
+	for i := range 24 {
 		columns[i] = fmt.Sprintf("total_h%d - cumulative_h%d as remaining_h%d", i, i, i)
 	}
 	return strings.Join(columns, ",\n\t\t\t")
@@ -300,7 +300,7 @@ func (s *ClickhouseService) PopulateRemainingTimes(ctx context.Context) error {
 
 	// Generate cumulative column names for inner select
 	cumulativeColumns := make([]string, 24)
-	for i := 0; i < 24; i++ {
+	for i := range 24 {
 		cumulativeColumns[i] = fmt.Sprintf("cumulative_h%d", i)
 	}
 	cumulativeColumnsList := strings.Join(cumulativeColumns, ", ")
