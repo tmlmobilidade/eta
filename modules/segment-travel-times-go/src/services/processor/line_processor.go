@@ -47,10 +47,10 @@ type lineResult struct {
 	skipReason string
 }
 
-// ProcessAllLines processes all lines using a worker pool for parallel execution.
-// Uses goroutines with a configurable worker count for optimal performance.
+// ProcessAllLines processes all lines in batches using a worker pool for parallel execution.
+// Between batches, it checks for context cancellation to allow graceful shutdown.
+// Completed batches are fully persisted to ClickHouse before the next batch starts.
 func (lp *LineProcessor) ProcessAllLines(ctx context.Context, lineShapes types.LineShapesMap) error {
-	// Sort lines by lineID for consistent ordering
 	sortedLines := lp.sortLines(lineShapes)
 	totalLines := len(sortedLines)
 
@@ -59,76 +59,51 @@ func (lp *LineProcessor) ProcessAllLines(ctx context.Context, lineShapes types.L
 		return nil
 	}
 
-	lib.AppLogger.Title(fmt.Sprintf("Processing %d lines with %d workers", totalLines, lp.settings.WorkerCount))
+	batchSize := lp.settings.BatchSize
+	if batchSize <= 0 {
+		batchSize = 50
+	}
 
-	// Create worker display
+	totalBatches := (totalLines + batchSize - 1) / batchSize
+
+	lib.AppLogger.Title(fmt.Sprintf("Processing %d lines with %d workers in batches of %d (%d batches)",
+		totalLines, lp.settings.WorkerCount, batchSize, totalBatches))
+
+	// Create a single WorkerDisplay that spans all batches
 	display := lib.NewWorkerDisplay(lp.settings.WorkerCount, totalLines)
 
-	// Create channels for job distribution and result collection
-	jobs := make(chan lineJob, totalLines)
-	results := make(chan lineResult, totalLines)
-
-	// Start worker pool
-	var wg sync.WaitGroup
-	for w := 0; w < lp.settings.WorkerCount; w++ {
-		wg.Add(1)
-		go lp.worker(ctx, w, jobs, results, &wg, display)
-	}
-
-	// Submit all jobs
-	for index, line := range sortedLines {
-		jobs <- lineJob{
-			index:    index,
-			lineID:   line.lineID,
-			lineData: line.data,
-		}
-	}
-	close(jobs)
-
-	// Wait for all workers to finish and close results channel
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	// Collect and process results
 	var totalRecords, processedLines, skippedLines int
 	var firstError error
 
-	for result := range results {
-		if result.err != nil {
-			if firstError == nil {
-				firstError = result.err
-			}
-			display.LineErrored()
-			lib.AppLogger.Error(result.err, "Failed to process line %d", result.lineID)
-			continue
+	for batchIdx := range totalBatches {
+		// Check for cancellation between batches
+		if ctx.Err() != nil {
+			display.Stop()
+			lib.AppLogger.Info("Shutdown requested — stopping after batch %d/%d (%d lines processed, %d skipped)",
+				batchIdx, totalBatches, processedLines, skippedLines)
+			return ctx.Err()
 		}
 
-		if result.skipped {
-			skippedLines++
-			display.LineSkipped()
-			continue
+		start := batchIdx * batchSize
+		end := min(start + batchSize, totalLines)
+		batch := sortedLines[start:end]
+
+		lib.AppLogger.Debug("Starting batch %d/%d (lines %d-%d)",
+			batchIdx+1, totalBatches, start+1, end)
+
+		result := lp.processBatch(ctx, batch, display)
+
+		totalRecords += result.records
+		processedLines += result.processed
+		skippedLines += result.skipped
+		if result.err != nil && firstError == nil {
+			firstError = result.err
 		}
 
-		// Save records to ClickHouse
-		if len(result.records) > 0 {
-			if err := lp.clickhouse.SaveTravelTimes(ctx, result.records); err != nil {
-				lib.AppLogger.Error(err, "Failed to save travel times for line %d", result.lineID)
-				if firstError == nil {
-					firstError = err
-				}
-				display.LineErrored()
-				continue
-			}
-			totalRecords += len(result.records)
-		}
-
-		processedLines++
-		display.LineCompleted(len(result.records))
+		lib.AppLogger.Debug("Batch %d/%d complete: %d processed, %d skipped, %d records",
+			batchIdx+1, totalBatches, result.processed, result.skipped, result.records)
 	}
 
-	// Stop display
 	display.Stop()
 
 	lib.AppLogger.Success(
@@ -137,6 +112,83 @@ func (lp *LineProcessor) ProcessAllLines(ctx context.Context, lineShapes types.L
 	)
 
 	return firstError
+}
+
+// batchResult holds the aggregated outcome of processing a single batch.
+type batchResult struct {
+	processed int
+	skipped   int
+	records   int
+	err       error
+}
+
+// processBatch processes a slice of lines using the worker pool pattern.
+// Channels are sized to the batch length, bounding memory usage.
+func (lp *LineProcessor) processBatch(ctx context.Context, batch []sortedLine, display *lib.WorkerDisplay) batchResult {
+	batchLen := len(batch)
+
+	jobs := make(chan lineJob, batchLen)
+	results := make(chan lineResult, batchLen)
+
+	// Start worker pool
+	var wg sync.WaitGroup
+	for w := 0; w < lp.settings.WorkerCount; w++ {
+		wg.Add(1)
+		go lp.worker(ctx, w, jobs, results, &wg, display)
+	}
+
+	// Submit batch jobs
+	for index, line := range batch {
+		jobs <- lineJob{
+			index:    index,
+			lineID:   line.lineID,
+			lineData: line.data,
+		}
+	}
+	close(jobs)
+
+	// Wait for workers and close results
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results
+	var br batchResult
+	for result := range results {
+		if result.err != nil {
+			if br.err == nil {
+				br.err = result.err
+			}
+			display.LineErrored()
+			lib.AppLogger.Error(result.err, "Failed to process line %d", result.lineID)
+			continue
+		}
+
+		if result.skipped {
+			br.skipped++
+			display.LineSkipped()
+			continue
+		}
+
+		// Save records to ClickHouse
+		if len(result.records) > 0 {
+			if err := lp.clickhouse.SaveTravelTimes(ctx, result.records); err != nil {
+				lib.AppLogger.Error(err, "Failed to save travel times for line %d", result.lineID)
+				if br.err == nil {
+					br.err = err
+				}
+				display.LineErrored()
+				continue
+			}
+			br.records += len(result.records)
+		}
+
+		br.processed++
+		display.LineCompleted(len(result.records))
+	}
+
+	return br
 }
 
 // sortedLine is a helper struct for sorting lines by ID.

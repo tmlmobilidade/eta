@@ -129,6 +129,7 @@ func LoadConfig() *Config {
 			RideStartDate:       startDate.UnixMilli(),
 			SegmentLengthMeters: getEnvFloat("SEGMENT_LENGTH_METERS", 50.0),
 			WorkerCount:         getEnvInt("WORKER_COUNT", defaultWorkers),
+		BatchSize:           getEnvInt("BATCH_SIZE", 50),
 		},
 
 		LogLevel: flags.LogLevel,

@@ -7,6 +7,9 @@ import (
 	clickhouseService "main/src/services/clickhouse"
 	mongoService "main/src/services/mongo"
 	"main/src/services/processor"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -19,9 +22,17 @@ func main() {
 	config := lib.LoadConfig()
 	lib.AppLogger.SetLogLevel(config.LogLevel)
 
+	// Create a context that cancels on SIGINT or SIGTERM
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// Run the main processing loop
 	runOnInterval := func() {
-		if err := runProcessing(config); err != nil {
+		if err := runProcessing(ctx, config); err != nil {
+			if ctx.Err() != nil {
+				lib.AppLogger.Info("Processing interrupted by shutdown signal")
+				return
+			}
 			lib.AppLogger.Error(err, "Processing failed")
 		}
 	}
@@ -29,18 +40,29 @@ func main() {
 	// Initial run
 	runOnInterval()
 
+	// Check if shutdown was requested before scheduling more runs
+	if ctx.Err() != nil {
+		lib.AppLogger.Info("Shutting down gracefully")
+		return
+	}
+
 	// Schedule subsequent runs at the configured interval
 	ticker := time.NewTicker(lib.RunInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		runOnInterval()
+	for {
+		select {
+		case <-ctx.Done():
+			lib.AppLogger.Info("Shutting down gracefully")
+			return
+		case <-ticker.C:
+			runOnInterval()
+		}
 	}
 }
 
 // runProcessing executes the main travel time calculation workflow.
-func runProcessing(config *lib.Config) error {
-	ctx := context.Background()
+func runProcessing(ctx context.Context, config *lib.Config) error {
 	globalStart := time.Now()
 
 	lib.AppLogger.Title("Starting travel time calculation")

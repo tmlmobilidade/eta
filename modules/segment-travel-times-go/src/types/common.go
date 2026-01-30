@@ -29,6 +29,9 @@ type Settings struct {
 	SegmentLengthMeters float64
 	// WorkerCount is the number of parallel workers for line processing.
 	WorkerCount int
+	// BatchSize is the number of lines to process per batch.
+	// Between batches, the processor checks for cancellation and flushes results.
+	BatchSize int
 }
 
 // LineShapeData contains shape data associated with a single line.
