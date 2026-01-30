@@ -71,11 +71,16 @@ func (lp *LineProcessor) processShapeTravelTimes(events []types.VehicleEvent, no
 	// Calculate bearings for all node pairs
 	shapeBearings := geo.CalculateShapeBearings(nodes)
 
+	// Build NodeIndex once for this shape - enables O(1) nearest-node lookups
+	// instead of O(n) linear scans for each event
+	nodeIndex := geo.NewNodeIndex(nodes, uint(lp.settings.GeohashPrecision))
+
 	// Group events by trip
 	tripGroups := groupEventsByTrip(events)
 
-	// Collect all samples from all trips
-	var allSamples []nodeTravelTimeSample
+	// Estimate total samples for pre-allocation
+	estimatedSamples := len(events) / 2
+	allSamples := make([]nodeTravelTimeSample, 0, estimatedSamples)
 
 	for _, tripEvents := range tripGroups {
 		// Skip trips with only one event
@@ -83,8 +88,8 @@ func (lp *LineProcessor) processShapeTravelTimes(events []types.VehicleEvent, no
 			continue
 		}
 
-		// Match events to nodes, filtering by bearing
-		matches := matchEventsToNodes(tripEvents, nodes, shapeBearings, lp.settings.BearingThreshold)
+		// Match events to nodes using the indexed lookup (O(1) per event)
+		matches := matchEventsToNodes(tripEvents, nodeIndex, shapeBearings, lp.settings.BearingThreshold)
 
 		// Calculate travel times from matches
 		samples := calculateTravelTimeSamples(matches)

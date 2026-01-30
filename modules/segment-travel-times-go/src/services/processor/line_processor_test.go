@@ -21,6 +21,18 @@ func (m *mockClickhouse) FetchVehicleEvents(ctx context.Context, geohashes []str
 	return m.fetchResult, m.fetchErr
 }
 
+func (m *mockClickhouse) FetchVehicleEventsByGeohash(ctx context.Context, geohashes []string, settings *types.Settings) (map[string][]types.VehicleEvent, error) {
+	if m.fetchErr != nil {
+		return nil, m.fetchErr
+	}
+	// Group events by geohash (for mock, just put all events in each requested geohash)
+	result := make(map[string][]types.VehicleEvent)
+	for _, gh := range geohashes {
+		result[gh] = m.fetchResult
+	}
+	return result, nil
+}
+
 func (m *mockClickhouse) DeleteTravelTimesForShapes(ctx context.Context, lineID uint32, hashedShapeIDs []string) error {
 	return m.deleteErr
 }

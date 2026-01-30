@@ -155,3 +155,28 @@ func (s *ClickhouseService) FetchVehicleEvents(ctx context.Context, geohashes []
 
 	return events, nil
 }
+
+// FetchVehicleEventsByGeohash fetches vehicle events and groups them by geohash.
+// This is useful for caching events by geohash for reuse across multiple lines.
+func (s *ClickhouseService) FetchVehicleEventsByGeohash(ctx context.Context, geohashes []string, settings *types.Settings) (map[string][]types.VehicleEvent, error) {
+	events, err := s.FetchVehicleEvents(ctx, geohashes, settings)
+	if err != nil {
+		return nil, err
+	}
+
+	// Group events by geohash
+	grouped := make(map[string][]types.VehicleEvent)
+	for _, event := range events {
+		grouped[event.Geohash] = append(grouped[event.Geohash], event)
+	}
+
+	// Ensure all requested geohashes have an entry (even if empty)
+	// This allows the cache to know that a geohash has been fetched but had no events
+	for _, gh := range geohashes {
+		if _, ok := grouped[gh]; !ok {
+			grouped[gh] = []types.VehicleEvent{}
+		}
+	}
+
+	return grouped, nil
+}

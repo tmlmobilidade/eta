@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"main/src/lib/geo"
 	"main/src/types"
 	"math"
 	"testing"
@@ -162,10 +163,13 @@ func TestMatchEventsToNodes(t *testing.T) {
 	shapeBearings := []float64{0, 0, 0, 0, 0}
 	threshold := 45.0
 
+	// Create NodeIndex for main tests
+	nodeIndex := geo.NewNodeIndex(nodes, 7)
+
 	tests := []struct {
 		name          string
 		events        []types.VehicleEvent
-		nodes         []types.Coordinate
+		nodeIndex     *geo.NodeIndex
 		bearings      []float64
 		threshold     float64
 		expectedCount int
@@ -173,7 +177,7 @@ func TestMatchEventsToNodes(t *testing.T) {
 		{
 			name:          "empty events",
 			events:        []types.VehicleEvent{},
-			nodes:         nodes,
+			nodeIndex:     nodeIndex,
 			bearings:      shapeBearings,
 			threshold:     threshold,
 			expectedCount: 0,
@@ -183,7 +187,7 @@ func TestMatchEventsToNodes(t *testing.T) {
 			events: []types.VehicleEvent{
 				{Longitude: 24.9, Latitude: 60.0, CreatedAt: 1000},
 			},
-			nodes:         nodes,
+			nodeIndex:     nodeIndex,
 			bearings:      shapeBearings,
 			threshold:     threshold,
 			expectedCount: 0,
@@ -191,7 +195,7 @@ func TestMatchEventsToNodes(t *testing.T) {
 		{
 			name:          "empty nodes",
 			events:        []types.VehicleEvent{{}, {}},
-			nodes:         []types.Coordinate{},
+			nodeIndex:     geo.NewNodeIndex([]types.Coordinate{}, 7),
 			bearings:      []float64{},
 			threshold:     threshold,
 			expectedCount: 0,
@@ -199,7 +203,7 @@ func TestMatchEventsToNodes(t *testing.T) {
 		{
 			name:          "single node returns nil",
 			events:        []types.VehicleEvent{{}, {}},
-			nodes:         []types.Coordinate{{24.9, 60.0}},
+			nodeIndex:     geo.NewNodeIndex([]types.Coordinate{{24.9, 60.0}}, 7),
 			bearings:      []float64{0},
 			threshold:     threshold,
 			expectedCount: 0,
@@ -210,7 +214,7 @@ func TestMatchEventsToNodes(t *testing.T) {
 				{Longitude: 24.9, Latitude: 60.0, CreatedAt: 1000},
 				{Longitude: 24.9, Latitude: 60.004, CreatedAt: 5000},
 			},
-			nodes:         nodes,
+			nodeIndex:     nodeIndex,
 			bearings:      shapeBearings,
 			threshold:     threshold,
 			expectedCount: 2, // first event matched + last event advancing
@@ -221,7 +225,7 @@ func TestMatchEventsToNodes(t *testing.T) {
 				{Longitude: 24.9, Latitude: 60.004, CreatedAt: 1000},
 				{Longitude: 24.9, Latitude: 60.0, CreatedAt: 5000},
 			},
-			nodes:         nodes,
+			nodeIndex:     nodeIndex,
 			bearings:      shapeBearings,
 			threshold:     threshold,
 			expectedCount: 0, // bearing ~180, threshold 45, filtered out
@@ -233,7 +237,7 @@ func TestMatchEventsToNodes(t *testing.T) {
 				{Longitude: 24.9, Latitude: 60.002, CreatedAt: 3000},
 				{Longitude: 24.9, Latitude: 60.004, CreatedAt: 5000},
 			},
-			nodes:         nodes,
+			nodeIndex:     nodeIndex,
 			bearings:      shapeBearings,
 			threshold:     threshold,
 			expectedCount: 3, // 2 from pairs + 1 last event
@@ -242,7 +246,7 @@ func TestMatchEventsToNodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := matchEventsToNodes(tt.events, tt.nodes, tt.bearings, tt.threshold)
+			result := matchEventsToNodes(tt.events, tt.nodeIndex, tt.bearings, tt.threshold)
 			if len(result) != tt.expectedCount {
 				t.Errorf("expected %d matches, got %d", tt.expectedCount, len(result))
 			}
@@ -256,7 +260,7 @@ func TestMatchEventsToNodes(t *testing.T) {
 			{Longitude: 24.9, Latitude: 60.004, CreatedAt: 3000},
 			{Longitude: 24.9, Latitude: 60.001, CreatedAt: 5000}, // goes backward
 		}
-		result := matchEventsToNodes(events, nodes, shapeBearings, threshold)
+		result := matchEventsToNodes(events, nodeIndex, shapeBearings, threshold)
 		// First pair (60.002->60.004) is northward, should match.
 		// Last event at 60.001 is node 1, but last match is at node ~4, so not advancing. Excluded.
 		// Actually the last event is at node 1 which is < node 4, so it won't be added.
@@ -279,7 +283,7 @@ func TestMatchEventsToNodes(t *testing.T) {
 			{Longitude: 24.9, Latitude: 60.0, CreatedAt: 43200000},  // noon
 			{Longitude: 24.9, Latitude: 60.004, CreatedAt: 46800000}, // 1pm
 		}
-		result := matchEventsToNodes(events, nodes, shapeBearings, threshold)
+		result := matchEventsToNodes(events, nodeIndex, shapeBearings, threshold)
 		if len(result) > 0 && result[0].hour != 12 {
 			t.Errorf("expected hour 12, got %d", result[0].hour)
 		}
@@ -413,10 +417,15 @@ func TestCalculateTravelTimeSamples(t *testing.T) {
 }
 
 func TestAggregateSamples(t *testing.T) {
+	// Helper to create uint32 keys matching makeAggregationKey
+	key := func(nodeIndex, hour int) uint32 {
+		return uint32(nodeIndex)<<8 | uint32(hour&0xFF)
+	}
+
 	tests := []struct {
 		name     string
 		samples  []nodeTravelTimeSample
-		expected map[string]struct {
+		expected map[uint32]struct {
 			count int
 			total float64
 		}
@@ -424,15 +433,15 @@ func TestAggregateSamples(t *testing.T) {
 		{
 			name:     "empty samples",
 			samples:  []nodeTravelTimeSample{},
-			expected: map[string]struct{ count int; total float64 }{},
+			expected: map[uint32]struct{ count int; total float64 }{},
 		},
 		{
 			name: "single sample",
 			samples: []nodeTravelTimeSample{
 				{nodeIndex: 1, hour: 10, travelTimeSeconds: 5.0},
 			},
-			expected: map[string]struct{ count int; total float64 }{
-				"1-10": {count: 1, total: 5.0},
+			expected: map[uint32]struct{ count int; total float64 }{
+				key(1, 10): {count: 1, total: 5.0},
 			},
 		},
 		{
@@ -441,8 +450,8 @@ func TestAggregateSamples(t *testing.T) {
 				{nodeIndex: 1, hour: 10, travelTimeSeconds: 5.0},
 				{nodeIndex: 1, hour: 10, travelTimeSeconds: 3.0},
 			},
-			expected: map[string]struct{ count int; total float64 }{
-				"1-10": {count: 2, total: 8.0},
+			expected: map[uint32]struct{ count int; total float64 }{
+				key(1, 10): {count: 2, total: 8.0},
 			},
 		},
 		{
@@ -451,9 +460,9 @@ func TestAggregateSamples(t *testing.T) {
 				{nodeIndex: 1, hour: 10, travelTimeSeconds: 5.0},
 				{nodeIndex: 1, hour: 11, travelTimeSeconds: 3.0},
 			},
-			expected: map[string]struct{ count int; total float64 }{
-				"1-10": {count: 1, total: 5.0},
-				"1-11": {count: 1, total: 3.0},
+			expected: map[uint32]struct{ count int; total float64 }{
+				key(1, 10): {count: 1, total: 5.0},
+				key(1, 11): {count: 1, total: 3.0},
 			},
 		},
 		{
@@ -462,9 +471,9 @@ func TestAggregateSamples(t *testing.T) {
 				{nodeIndex: 1, hour: 10, travelTimeSeconds: 5.0},
 				{nodeIndex: 2, hour: 10, travelTimeSeconds: 3.0},
 			},
-			expected: map[string]struct{ count int; total float64 }{
-				"1-10": {count: 1, total: 5.0},
-				"2-10": {count: 1, total: 3.0},
+			expected: map[uint32]struct{ count int; total float64 }{
+				key(1, 10): {count: 1, total: 5.0},
+				key(2, 10): {count: 1, total: 3.0},
 			},
 		},
 		{
@@ -476,10 +485,10 @@ func TestAggregateSamples(t *testing.T) {
 				{nodeIndex: 2, hour: 10, travelTimeSeconds: 4.0},
 				{nodeIndex: 1, hour: 11, travelTimeSeconds: 2.0},
 			},
-			expected: map[string]struct{ count int; total float64 }{
-				"1-10": {count: 3, total: 18.0},
-				"2-10": {count: 1, total: 4.0},
-				"1-11": {count: 1, total: 2.0},
+			expected: map[uint32]struct{ count int; total float64 }{
+				key(1, 10): {count: 3, total: 18.0},
+				key(2, 10): {count: 1, total: 4.0},
+				key(1, 11): {count: 1, total: 2.0},
 			},
 		},
 	}
@@ -492,17 +501,17 @@ func TestAggregateSamples(t *testing.T) {
 				t.Errorf("expected %d groups, got %d", len(tt.expected), len(result))
 			}
 
-			for key, exp := range tt.expected {
-				agg, exists := result[key]
+			for k, exp := range tt.expected {
+				agg, exists := result[k]
 				if !exists {
-					t.Errorf("expected key %s not found", key)
+					t.Errorf("expected key %d not found", k)
 					continue
 				}
 				if agg.sampleCount != exp.count {
-					t.Errorf("key %s: expected count %d, got %d", key, exp.count, agg.sampleCount)
+					t.Errorf("key %d: expected count %d, got %d", k, exp.count, agg.sampleCount)
 				}
 				if math.Abs(agg.totalTravelTime-exp.total) > 0.001 {
-					t.Errorf("key %s: expected total %f, got %f", key, exp.total, agg.totalTravelTime)
+					t.Errorf("key %d: expected total %f, got %f", k, exp.total, agg.totalTravelTime)
 				}
 			}
 		})
