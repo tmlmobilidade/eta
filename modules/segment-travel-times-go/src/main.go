@@ -85,7 +85,7 @@ func runProcessing(config *lib.Config) error {
 	 * but for now we assume that the vehicle events in the same line are going to be mostly in the same geohashes.
 	 */
 	lib.AppLogger.Info("> Aggregating rides to line shapes")
-	lineShapes, processedCount, err := mongoClient.AggregateRidesToLineShapes(ctx, cursor, config.Settings)
+	lineShapes, processedCount, err := mongoClient.AggregateRidesToLineShapes(ctx, cursor, config.Settings, totalCount)
 	if err != nil {
 		return err
 	}

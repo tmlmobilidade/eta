@@ -134,24 +134,42 @@ func processRideWithHashedShape(ride *types.Ride, hashedShape types.HashedShapeP
 // Optimized to batch fetch all hashed shapes in a single database call.
 //
 // Returns the line shapes map and count of processed shapes.
-func (s *MongoService) AggregateRidesToLineShapes(ctx context.Context, cursor *mongo.Cursor, settings *types.Settings) (types.LineShapesMap, int, error) {
+func (s *MongoService) AggregateRidesToLineShapes(ctx context.Context, cursor *mongo.Cursor, settings *types.Settings, totalCount int64) (types.LineShapesMap, int, error) {
 	// Step 1: Collect all rides and unique hashed_shape_ids
 	var rides []*types.Ride
 	uniqueHashedShapeIDs := make(map[string]struct{})
+
+	// Create progress bar
+	progressBar := lib.AppLogger.NewProgressBar(int(totalCount), "Collecting rides")
 
 	count := 0
 	for cursor.Next(ctx) {
 		var ride types.Ride
 		if err := cursor.Decode(&ride); err != nil {
 			cursor.Close(ctx)
+			if progressBar != nil {
+				progressBar.Close()
+			}
 			return nil, 0, lib.AppLogger.Error(err, "failed to decode ride")
 		}
 		rides = append(rides, &ride)
 		uniqueHashedShapeIDs[ride.HashedShapeID] = struct{}{}
 		count++
-		if count % 1000 == 0 {
-			lib.AppLogger.Debug("Collected %d rides with %d unique hashed shapes", count, len(uniqueHashedShapeIDs))
+		
+		// Update progress bar
+		if progressBar != nil {
+			progressBar.Add()
+		} else {
+			// Only log debug messages when progress bar is not active
+			if count % 1000 == 0 {
+				lib.AppLogger.Debug("Collected %d rides with %d unique hashed shapes", count, len(uniqueHashedShapeIDs))
+			}
 		}
+	}
+
+	// Finish progress bar
+	if progressBar != nil {
+		progressBar.Finish()
 	}
 
 	if err := cursor.Err(); err != nil {

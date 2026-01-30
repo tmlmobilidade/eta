@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/schollz/progressbar/v3"
 )
 
 // Level defines the severity of the log message
@@ -340,10 +341,83 @@ func (pt *PerformanceTracker) End() {
 	pt.logger.Debug(fmt.Sprintf("[%s] Operation completed in %v", pt.operation, duration))
 }
 
-// ProgressBar prints a progress bar
-func (l *Logger) ProgressBar(current, total int) {
+// ProgressBar represents a progress bar instance
+type ProgressBar struct {
+	bar    *progressbar.ProgressBar
+	logger *Logger
+}
+
+// NewProgressBar creates a new progress bar with the specified total count
+func (l *Logger) NewProgressBar(total int, description string) *ProgressBar {
 	if !l.shouldLog(Info) {
+		return nil
+	}
+
+	// Configure progress bar with colors matching the logger's style
+	// Write to stderr to avoid interfering with stdout logs
+	bar := progressbar.NewOptions(
+		total,
+		progressbar.OptionSetDescription(description),
+		progressbar.OptionSetWidth(50),
+		progressbar.OptionShowCount(),
+		progressbar.OptionShowIts(),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "█",
+			SaucerHead:    "█",
+			SaucerPadding: "░",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionClearOnFinish(),
+		progressbar.OptionSetWriter(os.Stderr),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Fprintln(os.Stderr)
+		}),
+	)
+
+	return &ProgressBar{
+		bar:    bar,
+		logger: l,
+	}
+}
+
+// Add increments the progress bar by 1
+func (pb *ProgressBar) Add() {
+	if pb == nil || pb.bar == nil {
 		return
 	}
-	colorAccent.Printf("[%d/%d]\n", current, total)
+	_ = pb.bar.Add(1)
+}
+
+// Add increments the progress bar by the specified amount
+func (pb *ProgressBar) Add64(amount int64) {
+	if pb == nil || pb.bar == nil {
+		return
+	}
+	_ = pb.bar.Add64(amount)
+}
+
+// Set sets the progress bar to a specific value
+func (pb *ProgressBar) Set(current int) {
+	if pb == nil || pb.bar == nil {
+		return
+	}
+	_ = pb.bar.Set(current)
+}
+
+// Finish completes the progress bar
+func (pb *ProgressBar) Finish() {
+	if pb == nil || pb.bar == nil {
+		return
+	}
+	_ = pb.bar.Finish()
+}
+
+// Close closes the progress bar
+func (pb *ProgressBar) Close() error {
+	if pb == nil || pb.bar == nil {
+		return nil
+	}
+	return pb.bar.Close()
 }
