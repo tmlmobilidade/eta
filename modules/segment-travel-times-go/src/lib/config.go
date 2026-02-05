@@ -123,13 +123,14 @@ func LoadConfig() *Config {
 		},
 
 		Settings: &types.Settings{
-			BearingThreshold:    getEnvFloat("BEARING_THRESHOLD", 90.0),
-			GeohashPrecision:    getEnvInt("GEOHASH_PRECISION", 7),
-			RideEndDate:         endDate.UnixMilli(),
-			RideStartDate:       startDate.UnixMilli(),
-			SegmentLengthMeters: getEnvFloat("SEGMENT_LENGTH_METERS", 50.0),
-			WorkerCount:         getEnvInt("WORKER_COUNT", defaultWorkers),
-		BatchSize:           getEnvInt("BATCH_SIZE", 50),
+			BearingThreshold:           getEnvFloat("BEARING_THRESHOLD", 90.0),
+			GeohashPrecision:           getEnvInt("GEOHASH_PRECISION", 7),
+			RideEndDate:                endDate.UnixMilli(),
+			RideStartDate:              startDate.UnixMilli(),
+			SegmentLengthMeters:        getEnvFloat("SEGMENT_LENGTH_METERS", 25.0),
+			MaxNodeMatchDistanceMeters: getEnvFloat("MAX_NODE_MATCH_DISTANCE_METERS", 30.0),
+			WorkerCount:                getEnvInt("WORKER_COUNT", defaultWorkers),
+			BatchSize:                  getEnvInt("BATCH_SIZE", 50),
 		},
 
 		LogLevel: flags.LogLevel,

@@ -118,7 +118,7 @@ func runProcessing(ctx context.Context, config *lib.Config) error {
 	 * Uses a worker pool with goroutines for parallel processing.
 	 * See processLine() function for detailed documentation on the processing logic.
 	 */
-	lineProcessor := processor.NewLineProcessor(clickhouseClient, config.Settings)
+	lineProcessor := processor.NewLinesProcessor(clickhouseClient, config.Settings)
 	if err := lineProcessor.ProcessAllLines(ctx, lineShapes); err != nil {
 		lib.AppLogger.Error(err, "Some lines failed to process")
 		// Continue to create aggregation tables even if some lines failed

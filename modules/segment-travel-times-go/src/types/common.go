@@ -27,6 +27,10 @@ type Settings struct {
 	RideStartDate int64
 	// SegmentLengthMeters is the length of each segment in meters.
 	SegmentLengthMeters float64
+	// MaxNodeMatchDistanceMeters is the maximum allowed distance (in meters)
+	// between a vehicle event and a segment node when matching events to nodes.
+	// If set to a value <= 0, no distance limit is applied.
+	MaxNodeMatchDistanceMeters float64
 	// WorkerCount is the number of parallel workers for line processing.
 	WorkerCount int
 	// BatchSize is the number of lines to process per batch.

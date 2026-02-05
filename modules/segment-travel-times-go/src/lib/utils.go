@@ -118,3 +118,12 @@ func GetFieldByTag[T any](obj *T, tagKey string, tagValue string) string {
 
 	return ""
 }
+
+
+func SetToSlice[T comparable](set map[T]struct{}) []T {
+	slice := make([]T, 0, len(set))
+	for k := range set {
+		slice = append(slice, k)
+	}
+	return slice
+}

@@ -109,24 +109,34 @@ func (s *ClickhouseService) FetchVehicleEvents(ctx context.Context, geohashes []
 	}
 
 	query := fmt.Sprintf(`
-		SELECT
-			Concat(trip_id, '-', toString(operational_date)) AS trip_operational_id,
-			%s AS geohash,
-			created_at,
-			latitude,
-			longitude
-		FROM vehicle_events 
-		WHERE created_at >= %d AND created_at < %d
-		AND Char_length(trip_id) > 0
-		AND %s IN (%s)
-		ORDER BY trip_operational_id, created_at
-		LIMIT 1 BY
-			concat(trip_id, '-', toString(operational_date)),
-			geohash_7,
-			created_at,
-			latitude,
-			longitude
-	`, geohashColumn, settings.RideStartDate, settings.RideEndDate, geohashColumn, strings.Join(quotedGeohashes, ","))
+		WITH trip_events AS (
+			SELECT
+				Concat(trip_id, '-', toString(operational_date)) AS trip_operational_id,
+				%s AS geohash,
+				created_at,
+				latitude,
+				longitude
+			FROM vehicle_events 
+			WHERE created_at >= %d AND created_at < %d
+			AND Char_length(trip_id) > 0
+			AND %s IN (%s)
+			ORDER BY trip_operational_id, created_at
+			LIMIT 1 BY
+				concat(trip_id, '-', toString(operational_date)),
+				%s,
+				created_at,
+				latitude,
+				longitude
+		)
+		SELECT *
+		FROM trip_events
+		WHERE trip_operational_id IN (
+			SELECT trip_operational_id
+			FROM trip_events
+			GROUP BY trip_operational_id
+			HAVING count() >= 5
+		)
+	`, geohashColumn, settings.RideStartDate, settings.RideEndDate, geohashColumn, strings.Join(quotedGeohashes, ","), geohashColumn)
 
 	rows, err := s.conn.Query(ctx, query)
 	if err != nil {

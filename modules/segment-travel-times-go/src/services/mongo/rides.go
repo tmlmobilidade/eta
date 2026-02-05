@@ -62,12 +62,9 @@ func buildRidesAggregationPipeline(settings *types.Settings) mongo.Pipeline {
 	}
 
 	// Optional debug filter
-	// pipeline = append(pipeline, bson.D{{Key: "$match", Value: bson.M{
-	// 	"line_id": bson.M{
-	// 		"$gte": 1001,
-	// 		"$lte": 1500,
-	// 	},
-	// }}})
+	pipeline = append(pipeline, bson.D{{Key: "$match", Value: bson.M{
+		"line_id":1001,
+	}}})
 
 	return pipeline
 }
@@ -87,7 +84,7 @@ func createEmptyLineShapeData() *types.LineShapeData {
 	return &types.LineShapeData{
 		Geohashes:      make(map[string]struct{}),
 		HashedShapeIDs: []string{},
-		Nodes:          make(map[string][]types.Coordinate),
+		Nodes:          make(map[string][]types.Coordinate), // hashed_shape_id -> []Coordinate
 	}
 }
 

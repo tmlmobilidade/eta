@@ -56,8 +56,8 @@ func GetAngularDifference(bearing1, bearing2 float64) float64 {
 
 // IsValidBearing checks if an event bearing is valid (matches shape direction within threshold).
 // An event is valid if its bearing is within the threshold of the shape bearing.
-func IsValidBearing(eventBearing, shapeBearing, thresholdDegrees float64) bool {
-	difference := GetAngularDifference(eventBearing, shapeBearing)
+func IsValidBearing(b1, b2, thresholdDegrees float64) bool {
+	difference := GetAngularDifference(b1, b2)
 	return difference <= thresholdDegrees
 }
 
