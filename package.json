@@ -7,7 +7,7 @@
 	"license": "AGPL-3.0-or-later",
 	"main": "./dist/index.js",
 	"scripts": {
-		"dev:segments": "ENVIRONMENT=development dotenv-run -f ./environments/staging/secrets/.env -- turbo run dev --filter=@tmlmobilidade/segment-generator",
+		"dev:sync-vehicle-events": "ENVIRONMENT=development dotenv-run -f ./environments/staging/secrets/.env -- turbo run dev --filter=@tmlmobilidade/sync-vehicle-events",
 		"dev:travel-times": "ENVIRONMENT=development dotenv-run -f ./environments/staging/secrets/.env -- turbo run dev --filter=@tmlmobilidade/segment-travel-times",
 		"lint": "eslint ./src",
 		"lint:fix": "turbo lint:fix",
