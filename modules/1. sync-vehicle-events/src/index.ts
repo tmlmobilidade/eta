@@ -1,5 +1,6 @@
 /* * */
 
+import { createClient } from '@clickhouse/client';
 import { Dates } from '@tmlmobilidade/dates';
 import { rides, simplifiedVehicleEvents } from '@tmlmobilidade/interfaces';
 import { Logger } from '@tmlmobilidade/logger';
@@ -21,16 +22,21 @@ async function main() {
 	const globalTimer = new Timer();
 
 	//
-	// Setup Connections
+	// Setup Clickhouse
+
+	const clickhouseClient = createClient({
+		database: process.env.CLICKHOUSE_DATABASE,
+		password: process.env.CLICKHOUSE_PASSWORD,
+		url: `${process.env.CLICKHOUSE_TLS === 'true' ? 'https' : 'http'}://${process.env.CLICKHOUSE_HOST}:8123`,
+		username: process.env.CLICKHOUSE_USERNAME,
+	});
+
+	// Drop the vehicle_events table if it exists for a clean start
+	await clickhouseClient.command({ query: `DROP TABLE IF EXISTS vehicle_events` });
 
 	const clickhouseWriter = new ClickHouseWriter<EtaVehicleEvent>({
 		batch_size: 100_000,
-		clientConfig: {
-			database: process.env.CLICKHOUSE_DATABASE,
-			password: process.env.CLICKHOUSE_PASSWORD,
-			url: `${process.env.CLICKHOUSE_TLS === 'true' ? 'https' : 'http'}://${process.env.CLICKHOUSE_HOST}:${process.env.CLICKHOUSE_PORT}`,
-			username: process.env.CLICKHOUSE_USERNAME,
-		},
+		client: clickhouseClient,
 		table: 'vehicle_events',
 		tableSchema: EtaVehicleEventTableSchema,
 	});
@@ -59,7 +65,7 @@ async function main() {
 	};
 
 	const ridesCount = await ridesCollection.countDocuments(ridesQuery);
-	const ridesCursor = ridesCollection.find(ridesQuery, { projection: { _id: 0, end_time_observed: 1, hashed_shape_id: 1, operational_date: 1, start_time_observed: 1, trip_id: 1 } }).batchSize(30_000);
+	const ridesCursor = ridesCollection.find(ridesQuery, { projection: { _id: 1, end_time_observed: 1, hashed_shape_id: 1, operational_date: 1, start_time_observed: 1, trip_id: 1 } }).batchSize(30_000);
 	const simplifiedVehicleEventsCursor = await simplifiedVehicleEvents.getCollection();
 
 	Logger.info(`Found ${ridesCount} rides, processing...`);

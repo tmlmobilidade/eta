@@ -3,7 +3,9 @@
 	"version": "1.0.0",
 	"license": "AGPL-3.0-or-later",
 	"type": "module",
-	"files": ["dist"],
+	"files": [
+		"dist"
+	],
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"scripts": {
@@ -13,17 +15,18 @@
 		"lint:fix": "eslint . --fix"
 	},
 	"dependencies": {
-		"@tmlmobilidade/dates": "*",
-		"@tmlmobilidade/interfaces": "*",
-		"@tmlmobilidade/logger": "*",
-		"@tmlmobilidade/timer": "*",
-		"@tmlmobilidade/types": "*",
-		"@tmlmobilidade/writers": "*",
+		"@clickhouse/client": "^1.17.0",
+		"@tmlmobilidade/dates": "20260209.1731.14",
+		"@tmlmobilidade/interfaces": "20260209.1731.14",
+		"@tmlmobilidade/logger": "20260209.1731.14",
+		"@tmlmobilidade/timer": "20260209.1731.14",
+		"@tmlmobilidade/types": "20260209.1731.14",
+		"@tmlmobilidade/writers": "20260209.1731.14",
 		"luxon": "3.7.2",
 		"ngeohash": "^0.6.3"
 	},
 	"devDependencies": {
-		"@tmlmobilidade/tsconfig": "*",
+		"@tmlmobilidade/tsconfig": "20260209.1731.14",
 		"@types/luxon": "3.7.1",
 		"@types/ngeohash": "0.6.8",
 		"@types/node": "25.2.2",
