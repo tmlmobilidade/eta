@@ -50,11 +50,15 @@ func main() {
 
 	clickhouseClient, mongoClient := initializeClients(config)
 
+	//
 	// Fetch unique hashed shapes
+
 	hashedShapesByLine := clickhouseClient.FetchUniqueHashedShapesIDsByLine(ctx)
 	lib.AppLogger.Info("Found %d unique hashed shapes", len(hashedShapesByLine))
 
+	//
 	// Fetch hashed shapes by IDs
+	
 	hashedShapes := mongoClient.FetchHashedShapesByIDs(ctx, hashedShapesByLine.GetShapesByLineID(1002))
 	lib.AppLogger.Info("Found %d hashed shapes", len(hashedShapes))
 }
