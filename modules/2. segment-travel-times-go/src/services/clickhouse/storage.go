@@ -6,101 +6,41 @@ import (
 	"main/src/lib"
 	"main/src/types"
 	"strings"
+
+	_ "embed"
+
+	driver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
-// CreateTravelTimesTable creates the segment_travel_times table in ClickHouse if it doesn't exist.
-func (s *ClickhouseService) CreateTravelTimesTable(ctx context.Context) error {
-	query := `
-		CREATE TABLE IF NOT EXISTS segment_travel_times (
-			line_id UInt32,
-			hashed_shape_id String,
-			node_index UInt16,
-			latitude Float64,
-			longitude Float64,
-			hour UInt8,
-			travel_time_seconds Float32,
-			sample_count UInt32
-		) ENGINE = MergeTree()
-		ORDER BY (line_id, hashed_shape_id, node_index, hour)
-	`
+// *************
+// *  Queries  *
+// *************
 
-	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error(err, "failed to create segment_travel_times table")
-	}
+//go:embed queries/fetch-vehicle-events.sql
+var fetchVehicleEventsQuery string
 
-	lib.AppLogger.Info("Created/verified segment_travel_times table")
-	return nil
-}
+//go:embed queries/unique-hashed-shapes.sql
+var uniqueHashedShapesQuery string
 
-// SaveTravelTimes saves travel time records to ClickHouse using batch insert for efficiency.
-func (s *ClickhouseService) SaveTravelTimes(ctx context.Context, records []types.NodeTravelTimeRecord) error {
-	if len(records) == 0 {
-		return nil
-	}
+// *************
+// * Functions *
+// *************
 
-	batch, err := s.conn.PrepareBatch(ctx, "INSERT INTO segment_travel_times")
-	if err != nil {
-		return lib.AppLogger.Error(err, "failed to prepare batch")
-	}
+/**
+	Fetches Vehicle Events from filtered by geolocation.
+	Returns deduplicated vehicle events by ride_id and created_at.
+	Only returns trips with sufficient data points (min_events).
 
-	for _, record := range records {
-		if err := batch.Append(
-			record.LineID,
-			record.HashedShapeID,
-			record.NodeIndex,
-			record.Latitude,
-			record.Longitude,
-			record.Hour,
-			record.TravelTimeSeconds,
-			record.SampleCount,
-		); err != nil {
-			return lib.AppLogger.Error(err, "failed to append record to batch")
-		}
-	}
-
-	if err := batch.Send(); err != nil {
-		return lib.AppLogger.Error(err, "failed to send batch")
-	}
-
-	return nil
-}
-
-// DeleteTravelTimesForShapes deletes existing travel time records for specific line_id and hashed_shape_ids.
-// Used to prevent duplicate data when reprocessing.
-func (s *ClickhouseService) DeleteTravelTimesForShapes(ctx context.Context, lineID uint32, hashedShapeIDs []string) error {
-	if len(hashedShapeIDs) == 0 {
-		return nil
-	}
-
-	// Build the IN clause with quoted strings
-	quotedIDs := make([]string, len(hashedShapeIDs))
-	for i, id := range hashedShapeIDs {
-		quotedIDs[i] = fmt.Sprintf("'%s'", id)
-	}
-
-	query := fmt.Sprintf(`
-		ALTER TABLE segment_travel_times 
-		DELETE WHERE line_id = %d 
-		AND hashed_shape_id IN (%s)
-	`, lineID, strings.Join(quotedIDs, ","))
-
-	if err := s.conn.Exec(ctx, query); err != nil {
-		return lib.AppLogger.Error(err, "failed to delete travel times for shapes")
-	}
-
-	lib.AppLogger.Debug("Deleted existing travel time records for line %d with %d shapes", lineID, len(hashedShapeIDs))
-	return nil
-}
-
-// FetchVehicleEvents fetches vehicle events from ClickHouse for the given geohashes.
-// Events are filtered by date range and grouped by trip_operational_id.
-func (s *ClickhouseService) FetchVehicleEvents(ctx context.Context, geohashes []string, settings *types.Settings) ([]types.VehicleEvent, error) {
+	@param ctx context.Context: The context for the request.
+	@param geohashes []string: The geohashes to filter the vehicle events by.
+	@param settings *types.Settings: The settings for the request (min_events).
+	@return []types.VehicleEvent: The vehicle events.
+	@return error: The error if the request fails.
+*/
+func (c *ClickhouseClient) FetchVehicleEvents(ctx context.Context, geohashes []string, settings *types.Settings) ([]types.VehicleEvent, error) {
 	if len(geohashes) == 0 {
 		return nil, nil
 	}
-
-	// Build the geohash column name based on precision
-	geohashColumn := fmt.Sprintf("geohash_%d", settings.GeohashPrecision)
 
 	// Build the IN clause with quoted strings
 	quotedGeohashes := make([]string, len(geohashes))
@@ -108,85 +48,44 @@ func (s *ClickhouseService) FetchVehicleEvents(ctx context.Context, geohashes []
 		quotedGeohashes[i] = fmt.Sprintf("'%s'", gh)
 	}
 
-	query := fmt.Sprintf(`
-		WITH trip_events AS (
-			SELECT
-				Concat(trip_id, '-', toString(operational_date)) AS trip_operational_id,
-				%s AS geohash,
-				created_at,
-				latitude,
-				longitude
-			FROM vehicle_events 
-			WHERE created_at >= %d AND created_at < %d
-			AND Char_length(trip_id) > 0
-			AND %s IN (%s)
-			ORDER BY trip_operational_id, created_at
-			LIMIT 1 BY
-				concat(trip_id, '-', toString(operational_date)),
-				%s,
-				created_at,
-				latitude,
-				longitude
-		)
-		SELECT *
-		FROM trip_events
-		WHERE trip_operational_id IN (
-			SELECT trip_operational_id
-			FROM trip_events
-			GROUP BY trip_operational_id
-			HAVING count() >= 5
-		)
-	`, geohashColumn, settings.RideStartDate, settings.RideEndDate, geohashColumn, strings.Join(quotedGeohashes, ","), geohashColumn)
+	// Scanner function to scan the vehicle events
+	scanner := func(rows driver.Rows) (types.VehicleEvent, error) {
+		var event types.VehicleEvent
+		if err := rows.ScanStruct(&event); err != nil {
+			return types.VehicleEvent{}, err
+		}
+		return event, nil
+	}
 
-	rows, err := s.conn.Query(ctx, query)
+	query := fmt.Sprintf(fetchVehicleEventsQuery, strings.Join(quotedGeohashes, ","), settings.MinEvents)
+	events, err := QueryAll(c, ctx, query, scanner);
 	if err != nil {
 		return nil, lib.AppLogger.Error(err, "failed to fetch vehicle events")
-	}
-	defer rows.Close()
-
-	var events []types.VehicleEvent
-	for rows.Next() {
-		var event types.VehicleEvent
-		if err := rows.Scan(
-			&event.TripOperationalID,
-			&event.Geohash,
-			&event.CreatedAt,
-			&event.Latitude,
-			&event.Longitude,
-		); err != nil {
-			return nil, lib.AppLogger.Error(err, "failed to scan vehicle event")
-		}
-		events = append(events, event)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, lib.AppLogger.Error(err, "error iterating vehicle events")
 	}
 
 	return events, nil
 }
 
-// FetchVehicleEventsByGeohash fetches vehicle events and groups them by geohash.
-// This is useful for caching events by geohash for reuse across multiple lines.
-func (s *ClickhouseService) FetchVehicleEventsByGeohash(ctx context.Context, geohashes []string, settings *types.Settings) (map[string][]types.VehicleEvent, error) {
-	events, err := s.FetchVehicleEvents(ctx, geohashes, settings)
-	if err != nil {
-		return nil, err
-	}
+/**
+	Fetches unique hashed shapes from the database.
+	@return []string: The unique hashed shapes.
+	@return error: The error if the request fails.
+*/
+func (c *ClickhouseClient) FetchUniqueHashedShapes(ctx context.Context) ([]string, error) {
 
-	// Group events by geohash
-	grouped := make(map[string][]types.VehicleEvent)
-	for _, event := range events {
-		grouped[event.Geohash] = append(grouped[event.Geohash], event)
-	}
-
-	// Ensure all requested geohashes have an entry (even if empty)
-	// This allows the cache to know that a geohash has been fetched but had no events
-	for _, gh := range geohashes {
-		if _, ok := grouped[gh]; !ok {
-			grouped[gh] = []types.VehicleEvent{}
+	// Scanner function to scan the unique hashed shapes
+	scanner := func(rows driver.Rows) (string, error) {
+		var shape string
+		if err := rows.Scan(&shape); err != nil {
+			return "", err
 		}
+		return shape, nil
 	}
+	
+	shapes, err := QueryAll(c, ctx, uniqueHashedShapesQuery, scanner);
 
-	return grouped, nil
+	if err != nil {
+		return nil, lib.AppLogger.Error(err, "failed to fetch unique hashed shapes")
+	}
+	return shapes, nil
 }

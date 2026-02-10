@@ -123,6 +123,7 @@ func LoadConfig() *Config {
 		},
 
 		Settings: &types.Settings{
+			MinEvents:                  getEnvInt("MIN_EVENTS", 5),
 			BearingThreshold:           getEnvFloat("BEARING_THRESHOLD", 90.0),
 			GeohashPrecision:           getEnvInt("GEOHASH_PRECISION", 7),
 			RideEndDate:                endDate.UnixMilli(),

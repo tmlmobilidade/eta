@@ -17,6 +17,8 @@ type UnixTimestamp int64
 
 // Settings contains configuration for the segment travel times calculation.
 type Settings struct {
+	// MinEvents is the minimum number of events required for a trip to be analyzed.
+	MinEvents int
 	// BearingThreshold is the bearing threshold in degrees for filtering events (0-180).
 	BearingThreshold float64
 	// GeohashPrecision is the geohash precision level (typically 6-8).
