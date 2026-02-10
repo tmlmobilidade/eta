@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"main/src/lib"
+	"main/src/lib/geo"
 	"main/src/processor"
 	clickhouseService "main/src/services/clickhouse"
 	mongoService "main/src/services/mongo"
+	"main/src/types"
 	"os"
 	"os/signal"
 	"syscall"
@@ -77,7 +79,55 @@ func main() {
 		lib.AppLogger.Info("Found %d vehicle events for line %d", len(vehicleEvents), lineID)
 
 		//
-		// Log vehicle events
+		// Test vehicle events against Shape
+		for _, shapeID := range hashedShapesByLine.GetShapesByLineID(lineID) {
+			
+			// Get shape nodes for this shape
+			shapeNodes, exists := lineShape.Nodes[shapeID]
+
+			// Skip shapes with less than 2 nodes
+			if !exists || len(shapeNodes) < 2 {
+				continue
+			}
+
+			// Calculate Travel Times for this shape by iterating over the vehicle events
+			// We calculate groupings of the same trip ID, this is so we can get a bearing of events
+			for i := 1; i < len(vehicleEvents); i++ {
+				//
+
+				currEvent := vehicleEvents[i]
+				prevEvent := vehicleEvents[i-1]
+
+				// Skip if the current event is not the same trip as the previous event
+				// This means we are on a new trip ID
+				if currEvent.RideId != prevEvent.RideId {
+					continue
+				}
+
+				// Match events to nodes with a maximum distance threshold (in meters).
+				prevEventNode, okPrev := matchEventToNode(prevEvent, shapeNodes)
+				currEventNode, okCurr := matchEventToNode(currEvent, shapeNodes)
+
+				// Skip if either event is too far from all nodes.
+				if !okPrev || !okCurr {
+					continue
+				}
+
+				// Calculate bearing of events and nodes
+				eventsBearing := geo.CalculateBearing(
+					types.Coordinate{prevEvent.Longitude, prevEvent.Latitude},
+					types.Coordinate{currEvent.Longitude, currEvent.Latitude},
+				)
+
+				nodesBearing := geo.CalculateBearing(prevEventNode, currEventNode)
+
+				if !geo.IsValidBearing(eventsBearing, nodesBearing, config.Settings.BearingThreshold) {
+					continue
+				}
+
+			}
+		}
+
 
 	}
 }
