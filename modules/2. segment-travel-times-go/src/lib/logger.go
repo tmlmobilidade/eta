@@ -286,7 +286,7 @@ func (l *Logger) Fatal(format string, a ...any) error {
 func (l *Logger) Fatalf(format string, a ...any) error {
 	var resultErr error
 	l.log(Fatal, fmt.Sprintf(format, a...))
-	resultErr = errors.New(fmt.Sprintf(format, a...))
+	resultErr = fmt.Errorf(format, a...)
 	os.Exit(1)
 	return resultErr // unreachable, but satisfies return type
 }
@@ -327,7 +327,7 @@ type PerformanceTracker struct {
 
 // StartPerformanceTracker creates a new performance tracker
 func (l *Logger) StartPerformanceTracker(operation string) *PerformanceTracker {
-	l.Debug(fmt.Sprintf("[%s] Starting operation", operation))
+	l.Debug("%s", fmt.Sprintf("[%s] Starting operation", operation))
 	return &PerformanceTracker{
 		start:     time.Now(),
 		operation: operation,
@@ -338,7 +338,7 @@ func (l *Logger) StartPerformanceTracker(operation string) *PerformanceTracker {
 // End stops the performance tracker and logs the duration
 func (pt *PerformanceTracker) End() {
 	duration := time.Since(pt.start)
-	pt.logger.Debug(fmt.Sprintf("[%s] Operation completed in %v", pt.operation, duration))
+	pt.logger.Debug("%s", fmt.Sprintf("[%s] Operation completed in %v", pt.operation, duration))
 }
 
 // ProgressBar represents a progress bar instance
