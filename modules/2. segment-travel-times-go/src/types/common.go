@@ -39,17 +39,3 @@ type Settings struct {
 	// Between batches, the processor checks for cancellation and flushes results.
 	BatchSize int
 }
-
-// LineShapeData contains shape data associated with a single line.
-// Contains all hashed shapes, their segment nodes, and unique geohashes.
-type LineShapeData struct {
-	// Geohashes is a set of unique geohashes covering all segment endpoints.
-	Geohashes map[string]struct{}
-	// HashedShapeIDs is an array of hashed shape IDs belonging to this line.
-	HashedShapeIDs []string
-	// Nodes is a map from hashed_shape_id to its segment endpoint coordinates.
-	Nodes map[string][]Coordinate
-}
-
-// LineShapesMap is a map structure grouping LineShapeData by line_id.
-type LineShapesMap map[int]*LineShapeData

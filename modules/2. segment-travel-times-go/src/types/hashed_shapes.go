@@ -44,3 +44,11 @@ type ShapePoint struct {
 	Lat float64 `bson:"shape_pt_lat"`
 	Lon float64 `bson:"shape_pt_lon"`
 }
+
+func (h HashedShapesMap) GetCoordinatesByShapeID(shapeID string) []Coordinate {
+	coordinates := make([]Coordinate, 0)
+	for _, shapePoint := range h[shapeID] {
+		coordinates = append(coordinates, Coordinate{shapePoint.Lon, shapePoint.Lat})
+	}
+	return coordinates
+}

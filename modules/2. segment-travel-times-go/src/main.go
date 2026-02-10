@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"main/src/lib"
+	"main/src/processor"
 	clickhouseService "main/src/services/clickhouse"
 	mongoService "main/src/services/mongo"
 	"os"
@@ -58,7 +59,25 @@ func main() {
 
 	//
 	// Fetch hashed shapes by IDs
-	
-	hashedShapes := mongoClient.FetchHashedShapesByIDs(ctx, hashedShapesByLine.GetShapesByLineID(1002))
-	lib.AppLogger.Info("Found %d hashed shapes", len(hashedShapes))
+
+	lineShapesMap := processor.GenerateLineShapes(ctx, mongoClient, &hashedShapesByLine, config.Settings)
+	lib.AppLogger.Info("Generated %d line shapes", len(lineShapesMap))
+
+
+	//
+	// Process line shapes
+
+	for lineID, lineShape := range lineShapesMap {
+
+		//
+		// Fetch vehicle events
+
+		geohashes := lib.SetToSlice(lineShape.Geohashes)
+		vehicleEvents := clickhouseClient.FetchVehicleEvents(ctx, geohashes, config.Settings)
+		lib.AppLogger.Info("Found %d vehicle events for line %d", len(vehicleEvents), lineID)
+
+		//
+		// Log vehicle events
+
+	}
 }

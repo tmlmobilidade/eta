@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"main/src/lib"
 	"main/src/types"
+	"strconv"
 	"strings"
 
 	_ "embed"
@@ -57,7 +58,10 @@ func (c *ClickhouseClient) FetchVehicleEvents(ctx context.Context, geohashes []s
 		return event, nil
 	}
 
-	query := fmt.Sprintf(fetchVehicleEventsQuery, strings.Join(quotedGeohashes, ","), settings.MinEvents)
+	query := strings.ReplaceAll(fetchVehicleEventsQuery, "{geohashes}", strings.Join(quotedGeohashes, ","))
+	query = strings.ReplaceAll(query, "{min_events}", strconv.Itoa(settings.MinEvents))
+	
+	lib.AppLogger.Debug("Fetching vehicle events with query: %s", query)
 	events, err := QueryAll(c, ctx, query, scanner);
 	if err != nil {
 		panic(lib.AppLogger.Error(err, "failed to fetch vehicle events"))
