@@ -13,7 +13,7 @@ import { EtaVehicleEvent, EtaVehicleEventTableSchema } from './types.js';
 
 /* * */
 
-const RUN_INTERVAL_MS = 60_000 * 15; // 15 minutes
+const RUN_INTERVAL_MS = 60_000 * 60 * 24; // 24 hours
 const RIDES_BATCH_SIZE = 30_000;
 const AGENCY_IDS = ['41', '42', '43', '44'];
 
@@ -58,56 +58,57 @@ async function syncVehicleEvents(writer: ClickHouseWriter<EtaVehicleEvent>, star
 
 	const ridesQuery: Filter<Ride> = {
 		agency_id: { $in: AGENCY_IDS },
+		line_id: { $in: [1001, 1002] }, // ! Development only
 		start_time_observed: { $ne: null },
 		start_time_scheduled: { $gte: start.unix_timestamp, $lt: end.unix_timestamp },
 	};
 
 	const ridesCount = await ridesCollection.countDocuments(ridesQuery);
-	const ridesCursor = ridesCollection
-		.find(ridesQuery, {
-			projection: {
-				_id: 1,
-				end_time_observed: 1,
-				hashed_shape_id: 1,
-				operational_date: 1,
-				start_time_observed: 1,
-				trip_id: 1,
-			},
-		})
-		.batchSize(RIDES_BATCH_SIZE);
 
 	Logger.info(`Syncing vehicle events for ${ridesCount} rides (${start.toFormat('yyyy-MM-dd')} → ${end.toFormat('yyyy-MM-dd')})`);
-
-	//
 
 	let ridesProcessed = 0;
 	let eventsProcessed = 0;
 
-	//
-	// Process Rides
-	for await (const ride of ridesCursor) {
-		//
-
-		//
-		// Setup Vehicle Events
-		const vehicleEventsCursor = vehicleEventsCollection
-			.find({
-				created_at: { $gte: ride.start_time_observed, $lte: ride.end_time_observed },
-				trip_id: ride.trip_id,
+	// Process rides in batches to avoid cursor timeout
+	while (ridesProcessed < ridesCount) {
+		const ridesBatch = await ridesCollection
+			.find(ridesQuery, {
+				projection: {
+					_id: 1,
+					end_time_observed: 1,
+					hashed_shape_id: 1,
+					operational_date: 1,
+					start_time_observed: 1,
+					trip_id: 1,
+				},
 			})
-			.batchSize(BATCH_SIZE);
+			.skip(ridesProcessed)
+			.limit(RIDES_BATCH_SIZE)
+			.toArray();
 
-		//
-		// Process Vehicle Events
-		for await (const vehicleEvent of vehicleEventsCursor) {
-			await writer.write(parseToEtaVehicleEvent(vehicleEvent, ride.hashed_shape_id));
-			eventsProcessed++;
-			if (eventsProcessed % BATCH_SIZE === 0) {
-				Logger.progress(`Processed a total of ${eventsProcessed} events from ${ridesProcessed} rides`);
+		if (ridesBatch.length === 0) break;
+
+		// Process each ride in the batch
+		for (const ride of ridesBatch) {
+			const vehicleEventsCursor = vehicleEventsCollection
+				.find({
+					created_at: { $gte: ride.start_time_observed, $lte: ride.end_time_observed },
+					trip_id: ride.trip_id,
+				})
+				.batchSize(BATCH_SIZE);
+
+			for await (const vehicleEvent of vehicleEventsCursor) {
+				await writer.write(parseToEtaVehicleEvent(vehicleEvent, ride));
+				eventsProcessed++;
+				if (eventsProcessed % BATCH_SIZE === 0) {
+					Logger.progress(`Processed a total of ${eventsProcessed} events from ${ridesProcessed + ridesBatch.indexOf(ride) + 1} rides`);
+				}
 			}
 		}
 
-		ridesProcessed++;
+		ridesProcessed += ridesBatch.length;
+		Logger.progress(`Completed batch: ${ridesProcessed}/${ridesCount} rides processed`);
 	}
 
 	return { eventsProcessed, ridesProcessed };
@@ -129,7 +130,9 @@ async function main(): Promise<void> {
 	});
 
 	await client.command({ query: 'DROP TABLE IF EXISTS vehicle_events' });
+
 	const writer = createClickHouseWriter(client);
+	await writer.ensureTable(); // Creates table if it doesn't exist
 
 	//
 	// Get Date Range
