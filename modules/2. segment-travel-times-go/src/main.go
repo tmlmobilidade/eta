@@ -4,12 +4,33 @@ import (
 	"context"
 	"main/src/lib"
 	clickhouseService "main/src/services/clickhouse"
+	mongoService "main/src/services/mongo"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
-	"time"
 )
+
+func initializeClients(config *lib.Config) (*clickhouseService.ClickhouseClient, *mongoService.MongoClient) {
+	//
+	
+	//	
+	// Initialize Clickhouse Client
+	
+	clickhouseClient, err := clickhouseService.NewClickhouseClient(config.Clickhouse)
+	if err != nil {
+		panic(err)
+	}
+
+	//	
+	// Initialize MongoDB Client
+
+	mongoClient, err := mongoService.NewMongoClient(config.MongoDB.URI, config.MongoDB.Database)
+	if err != nil {
+		panic(err)
+	}
+
+	return clickhouseClient, mongoClient
+}
 
 func main() {
 	// Clear screen and initialize logger
@@ -24,23 +45,16 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	globalStart := time.Now()
+	//
+	// Initialize Clients
 
-	lib.AppLogger.Title("Starting travel time calculation")
-
-	// Initialize Clickhouse Client
-	clickhouseClient, err := clickhouseService.NewClickhouseClient(config.Clickhouse)
-	if err != nil {
-		lib.AppLogger.Error(err, "failed to initialize Clickhouse Client")
-		return
-	}
-	defer clickhouseClient.Close()
+	clickhouseClient, mongoClient := initializeClients(config)
 
 	// Fetch unique hashed shapes
-	uniqueHashedShapes, err := clickhouseClient.FetchUniqueHashedShapes(ctx)
-	if err != nil {
-		lib.AppLogger.Error(err, "failed to fetch unique hashed shapes")
-		return
-	}
-	lib.AppLogger.Info("Fetched %d (%s) unique hashed shapes in %s", len(uniqueHashedShapes), strings.Join(uniqueHashedShapes, ", "), time.Since(globalStart))
+	hashedShapesByLine := clickhouseClient.FetchUniqueHashedShapesIDsByLine(ctx)
+	lib.AppLogger.Info("Found %d unique hashed shapes", len(hashedShapesByLine))
+
+	// Fetch hashed shapes by IDs
+	hashedShapes := mongoClient.FetchHashedShapesByIDs(ctx, hashedShapesByLine.GetShapesByLineID(1002))
+	lib.AppLogger.Info("Found %d hashed shapes", len(hashedShapes))
 }

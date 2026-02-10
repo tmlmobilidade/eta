@@ -1,1 +1,0 @@
-SELECT DISTINCT hashed_shape_id FROM vehicle_events;

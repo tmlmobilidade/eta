@@ -19,8 +19,8 @@ import (
 //go:embed queries/fetch-vehicle-events.sql
 var fetchVehicleEventsQuery string
 
-//go:embed queries/unique-hashed-shapes.sql
-var uniqueHashedShapesQuery string
+//go:embed queries/unique-hashed-shapes-by-line.sql
+var uniqueHashedShapesByLineQuery string
 
 // *************
 // * Functions *
@@ -37,9 +37,9 @@ var uniqueHashedShapesQuery string
 	@return []types.VehicleEvent: The vehicle events.
 	@return error: The error if the request fails.
 */
-func (c *ClickhouseClient) FetchVehicleEvents(ctx context.Context, geohashes []string, settings *types.Settings) ([]types.VehicleEvent, error) {
+func (c *ClickhouseClient) FetchVehicleEvents(ctx context.Context, geohashes []string, settings *types.Settings) []types.VehicleEvent {
 	if len(geohashes) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	// Build the IN clause with quoted strings
@@ -60,10 +60,10 @@ func (c *ClickhouseClient) FetchVehicleEvents(ctx context.Context, geohashes []s
 	query := fmt.Sprintf(fetchVehicleEventsQuery, strings.Join(quotedGeohashes, ","), settings.MinEvents)
 	events, err := QueryAll(c, ctx, query, scanner);
 	if err != nil {
-		return nil, lib.AppLogger.Error(err, "failed to fetch vehicle events")
+		panic(lib.AppLogger.Error(err, "failed to fetch vehicle events"))
 	}
 
-	return events, nil
+	return events
 }
 
 /**
@@ -71,21 +71,23 @@ func (c *ClickhouseClient) FetchVehicleEvents(ctx context.Context, geohashes []s
 	@return []string: The unique hashed shapes.
 	@return error: The error if the request fails.
 */
-func (c *ClickhouseClient) FetchUniqueHashedShapes(ctx context.Context) ([]string, error) {
+func (c *ClickhouseClient) FetchUniqueHashedShapesIDsByLine(ctx context.Context) types.HashedShapeIdsByLineArray {
 
 	// Scanner function to scan the unique hashed shapes
-	scanner := func(rows driver.Rows) (string, error) {
-		var shape string
-		if err := rows.Scan(&shape); err != nil {
-			return "", err
+	scanner := func(rows driver.Rows) (types.HashedShapeIdsByLine, error) {
+		var hashedShapeIdsByLine types.HashedShapeIdsByLine
+		if err := rows.ScanStruct(&hashedShapeIdsByLine); err != nil {
+			return types.HashedShapeIdsByLine{}, err
 		}
-		return shape, nil
+		return hashedShapeIdsByLine, nil
 	}
 	
-	shapes, err := QueryAll(c, ctx, uniqueHashedShapesQuery, scanner);
+	hashedShapeIdsByLine, err := QueryAll(c, ctx, uniqueHashedShapesByLineQuery, scanner);
 
 	if err != nil {
-		return nil, lib.AppLogger.Error(err, "failed to fetch unique hashed shapes")
+		panic(lib.AppLogger.Error(err, "failed to fetch unique hashed shapes"))
 	}
-	return shapes, nil
+
+	
+	return hashedShapeIdsByLine
 }

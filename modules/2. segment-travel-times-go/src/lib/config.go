@@ -118,8 +118,8 @@ func LoadConfig() *Config {
 		},
 
 		MongoDB: MongoDBConfig{
-			URI:      getEnv("MONGODB_URI", "mongodb://localhost:27017"),
-			Database: getEnv("MONGODB_DATABASE", "production"),
+			URI:      getEnv("DATABASE_URI", "mongodb://localhost:27017"),
+			Database: getEnv("DATABASE_NAME", "production"),
 		},
 
 		Settings: &types.Settings{
