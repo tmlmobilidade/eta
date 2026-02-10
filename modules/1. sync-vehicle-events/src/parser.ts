@@ -39,6 +39,7 @@ export function parseToEtaVehicleEvent(simplifiedVehicleEvent: SimplifiedVehicle
 		geohash: geohash.encode(simplifiedVehicleEvent.latitude, simplifiedVehicleEvent.longitude, 7),
 		hashed_shape_id: ride.hashed_shape_id,
 		latitude: simplifiedVehicleEvent.latitude,
+		line_id: ride.line_id,
 		longitude: simplifiedVehicleEvent.longitude,
 		ride_id: ride._id,
 		vehicle_id: simplifiedVehicleEvent.vehicle_id,

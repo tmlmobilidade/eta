@@ -1,4 +1,4 @@
-import { UnixTimestamp } from '@tmlmobilidade/types';
+import { Ride } from '@tmlmobilidade/types';
 import { ClickHouseColumn } from '@tmlmobilidade/writers';
 
 export interface EtaVehicleEvent {
@@ -8,17 +8,27 @@ export interface EtaVehicleEvent {
 	geohash: string
 	hashed_shape_id: string
 	latitude: number
+	line_id: number
 	longitude: number
 	ride_id: string
 	vehicle_id: string
 }
 
-export type RidesMap = Map<string, { hashed_shape_id: string, start_time_observed: UnixTimestamp }>;
+export const rideProjection: Partial<Record<keyof Ride, 0 | 1>> = {
+	_id: 1,
+	end_time_observed: 1,
+	hashed_shape_id: 1,
+	line_id: 1,
+	operational_date: 1,
+	start_time_observed: 1,
+	trip_id: 1,
+};
 
 export const EtaVehicleEventTableSchema: ClickHouseColumn<EtaVehicleEvent>[] = [
 	{ name: '_id', type: 'String' },
 	{ name: 'ride_id', type: 'String' },
 	{ name: 'hashed_shape_id', type: 'String' },
+	{ name: 'line_id', type: 'UInt16' },
 	{ name: 'longitude', type: 'Float64' },
 	{ name: 'latitude', type: 'Float64' },
 	{ name: 'geohash', type: 'String' },

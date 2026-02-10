@@ -9,7 +9,7 @@ import { Ride } from '@tmlmobilidade/types';
 import { ClickHouseWriter } from '@tmlmobilidade/writers';
 
 import { parseToEtaVehicleEvent } from './parser.js';
-import { EtaVehicleEvent, EtaVehicleEventTableSchema } from './types.js';
+import { EtaVehicleEvent, EtaVehicleEventTableSchema, rideProjection } from './types.js';
 
 /* * */
 
@@ -73,16 +73,7 @@ async function syncVehicleEvents(writer: ClickHouseWriter<EtaVehicleEvent>, star
 	// Process rides in batches to avoid cursor timeout
 	while (ridesProcessed < ridesCount) {
 		const ridesBatch = await ridesCollection
-			.find(ridesQuery, {
-				projection: {
-					_id: 1,
-					end_time_observed: 1,
-					hashed_shape_id: 1,
-					operational_date: 1,
-					start_time_observed: 1,
-					trip_id: 1,
-				},
-			})
+			.find(ridesQuery, { projection: rideProjection })
 			.skip(ridesProcessed)
 			.limit(RIDES_BATCH_SIZE)
 			.toArray();
