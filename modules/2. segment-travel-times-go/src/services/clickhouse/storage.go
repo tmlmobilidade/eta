@@ -61,7 +61,6 @@ func (c *ClickhouseClient) FetchVehicleEvents(ctx context.Context, geohashes []s
 	query := strings.ReplaceAll(fetchVehicleEventsQuery, "{geohashes}", strings.Join(quotedGeohashes, ","))
 	query = strings.ReplaceAll(query, "{min_events}", strconv.Itoa(settings.MinEvents))
 	
-	lib.AppLogger.Debug("Fetching vehicle events with query: %s", query)
 	events, err := QueryAll(c, ctx, query, scanner);
 	if err != nil {
 		panic(lib.AppLogger.Error(err, "failed to fetch vehicle events"))

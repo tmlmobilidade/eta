@@ -24,7 +24,6 @@ func GenerateLineShapes(ctx context.Context, mongoClient *mongoService.MongoClie
 		lineShape := &types.LineShape{
 			Geohashes: make(map[string]struct{}),
 			Nodes: make(map[string][]types.Coordinate),
-			ShapeIDs: make(map[string]struct{}),
 		}
 
 		for _, shapeId := range line.HashedShapeIDs {
@@ -35,9 +34,6 @@ func GenerateLineShapes(ctx context.Context, mongoClient *mongoService.MongoClie
 
 			// Geohash nodes
 			lineShape.Geohashes = geo.EncodeCoordinatesToSet(lineShape.Nodes[shapeId], uint(settings.GeohashPrecision))
-
-			// Add shape ID to shape IDs map
-			lineShape.ShapeIDs[shapeId] = struct{}{}
 		}
 
 		//

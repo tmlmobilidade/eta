@@ -421,3 +421,20 @@ func (pb *ProgressBar) Close() error {
 	}
 	return pb.bar.Close()
 }
+
+// LogToFile appends a formatted line to the file at path, creating it if it does not exist.
+// Each line is prefixed with a timestamp (RFC3339). Returns an error if the file cannot be opened or written.
+func (l *Logger) LogToFile(path string, format string, a ...any) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return l.Error(err, "failed to open log file %s", path)
+	}
+	defer f.Close()
+	line := fmt.Sprintf(format, a...)
+	timestamp := time.Now().Format(time.RFC3339)
+	_, err = fmt.Fprintf(f, "%s %s\n", timestamp, line)
+	if err != nil {
+		return l.Error(err, "failed to write to log file %s", path)
+	}
+	return nil
+}
