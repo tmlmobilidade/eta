@@ -63,7 +63,7 @@ func ProcessLineShapes(
 				nodesBearing := geo.CalculateBearing(prevEventNode, currEventNode)
 
 				if eventsBearing == 0 && prevEventNode != currEventNode{
-					lib.AppLogger.Info("Events bearing is 0 and nodes are different, skipping segment %d -> %d", slices.Index(shapeNodes, prevEventNode), slices.Index(shapeNodes, currEventNode))
+					lib.AppLogger.Debug("Events bearing is 0 and nodes are different, skipping segment %d -> %d", slices.Index(shapeNodes, prevEventNode), slices.Index(shapeNodes, currEventNode))
 					continue;
 				}
 
