@@ -29,6 +29,30 @@ var dropNodeTravelTimesTableQuery string
 //go:embed queries/create-node-travel-times.sql
 var createNodeTravelTimesTableQuery string
 
+//go:embed queries/create-shape-hourly-summary.sql
+var createShapeHourlySummaryQuery string
+
+//go:embed queries/populate-shape-hourly-summary.sql
+var populateShapeHourlySummaryQuery string
+
+//go:embed queries/create-hourly-network-summary.sql
+var createHourlyNetworkSummaryQuery string
+
+//go:embed queries/populate-hourly-network-summary.sql
+var populateHourlyNetworkSummaryQuery string
+
+//go:embed queries/create-node-congestion-analysis.sql
+var createNodeCongestionAnalysisQuery string
+
+//go:embed queries/populate-node-congestion-analysis.sql
+var populateNodeCongestionAnalysisQuery string
+
+//go:embed queries/create-shape-performance.sql
+var createShapePerformanceQuery string
+
+//go:embed queries/populate-shape-performance.sql
+var populateShapePerformanceQuery string
+
 // *************
 // * Functions *
 // *************
@@ -117,6 +141,37 @@ func (c *ClickhouseClient) SetupSchema(ctx context.Context) {
 	}
 
 	lib.AppLogger.Info("Schema setup completed for node_travel_times table")
+}
+
+type aggregationTable struct {
+	name     string
+	create   string
+	populate string
+}
+
+// SetupAggregations drops, creates, and populates all aggregation tables
+// derived from node_travel_times. Must be called after data insertion.
+// Order matters: shape_performance depends on shape_hourly_summary.
+func (c *ClickhouseClient) SetupAggregations(ctx context.Context) {
+	tables := []aggregationTable{
+		{name: "shape_hourly_summary", create: createShapeHourlySummaryQuery, populate: populateShapeHourlySummaryQuery},
+		{name: "hourly_network_summary", create: createHourlyNetworkSummaryQuery, populate: populateHourlyNetworkSummaryQuery},
+		{name: "node_congestion_analysis", create: createNodeCongestionAnalysisQuery, populate: populateNodeCongestionAnalysisQuery},
+		{name: "shape_performance", create: createShapePerformanceQuery, populate: populateShapePerformanceQuery},
+	}
+
+	for _, t := range tables {
+		if err := c.conn.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", t.name)); err != nil {
+			panic(lib.AppLogger.Error(err, "failed to drop %s table", t.name))
+		}
+		if err := c.conn.Exec(ctx, t.create); err != nil {
+			panic(lib.AppLogger.Error(err, "failed to create %s table", t.name))
+		}
+		if err := c.conn.Exec(ctx, t.populate); err != nil {
+			panic(lib.AppLogger.Error(err, "failed to populate %s table", t.name))
+		}
+		lib.AppLogger.Info("Aggregation table %s created and populated", t.name)
+	}
 }
 
 func (c *ClickhouseClient) FetchUniqueHashedShapesIDsByLine(ctx context.Context) types.HashedShapeIdsByLineArray {

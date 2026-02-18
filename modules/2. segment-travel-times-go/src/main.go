@@ -70,4 +70,6 @@ func main() {
 	lib.AppLogger.Info("Generated %d travel time records", len(records))
 
 	clickhouseClient.InsertNodeTravelTimeRecords(ctx, records)
+
+	clickhouseClient.SetupAggregations(ctx)
 }
