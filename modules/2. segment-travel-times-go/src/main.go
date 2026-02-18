@@ -63,5 +63,9 @@ func main() {
 	lineShapesMap := processor.GenerateLineShapes(ctx, mongoClient, &hashedShapesByLine, config.Settings)
 	lib.AppLogger.Info("Generated %d line shapes", len(lineShapesMap))
 
-	processor.ProcessLineShapes(ctx, clickhouseClient, lineShapesMap, &hashedShapesByLine, config.Settings)
+	records := processor.ProcessLineShapes(ctx, clickhouseClient, lineShapesMap, &hashedShapesByLine, config.Settings)
+	lib.AppLogger.Info("Processed %d line shapes and built %d node travel time records", len(lineShapesMap), len(records))
+	for _, record := range records {
+		lib.AppLogger.Info("Record: %+v", record)
+	}
 }
