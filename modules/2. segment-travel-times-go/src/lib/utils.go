@@ -31,3 +31,11 @@ func IfThenElse[T any](condition bool, a, b T) T {
 	}
 	return b
 }
+
+// Returns the hour of the day from an epoch seconds timestamp
+//
+//	@param timestamp int64 - The epoch seconds timestamp
+//	@return uint8 - The hour of the day
+func GetHourFromTimestamp(timestamp int64) uint8 {
+	return uint8((timestamp / 3600) % 24)
+}

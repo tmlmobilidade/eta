@@ -51,6 +51,9 @@ func main() {
 
 	clickhouseClient, mongoClient := initializeClients(config)
 
+	// Ensure ClickHouse tables exist (drop & recreate as needed)
+	clickhouseClient.SetupSchema(ctx)
+
 	//
 	// Fetch unique hashed shapes
 
@@ -64,8 +67,7 @@ func main() {
 	lib.AppLogger.Info("Generated %d line shapes", len(lineShapesMap))
 
 	records := processor.ProcessLineShapes(ctx, clickhouseClient, lineShapesMap, &hashedShapesByLine, config.Settings)
-	lib.AppLogger.Info("Processed %d line shapes and built %d node travel time records", len(lineShapesMap), len(records))
-	for _, record := range records {
-		lib.AppLogger.Info("Record: %+v", record)
-	}
+	lib.AppLogger.Info("Generated %d travel time records", len(records))
+
+	clickhouseClient.InsertNodeTravelTimeRecords(ctx, records)
 }

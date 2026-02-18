@@ -23,6 +23,12 @@ var fetchVehicleEventsQuery string
 //go:embed queries/unique-hashed-shapes-by-line.sql
 var uniqueHashedShapesByLineQuery string
 
+//go:embed queries/drop-node-travel-times.sql
+var dropNodeTravelTimesTableQuery string
+
+//go:embed queries/create-node-travel-times.sql
+var createNodeTravelTimesTableQuery string
+
 // *************
 // * Functions *
 // *************
@@ -74,6 +80,45 @@ func (c *ClickhouseClient) FetchVehicleEvents(ctx context.Context, geohashes []s
 	@return []string: The unique hashed shapes.
 	@return error: The error if the request fails.
 */
+func (c *ClickhouseClient) InsertNodeTravelTimeRecords(ctx context.Context, records []types.NodeTravelTimeRecord) {
+	if len(records) == 0 {
+		return
+	}
+
+	batch, err := c.conn.PrepareBatch(ctx, "INSERT INTO node_travel_times")
+	if err != nil {
+		panic(lib.AppLogger.Error(err, "failed to prepare batch for node_travel_times"))
+	}
+
+	for i := range records {
+		if err := batch.AppendStruct(&records[i]); err != nil {
+			panic(lib.AppLogger.Error(err, "failed to append record to batch"))
+		}
+	}
+
+	if err := batch.Send(); err != nil {
+		panic(lib.AppLogger.Error(err, "failed to send batch to node_travel_times"))
+	}
+
+	lib.AppLogger.Info("Inserted %d records into node_travel_times", len(records))
+}
+
+// SetupSchema drops and recreates tables used by this service.
+// Currently manages the node_travel_times table.
+func (c *ClickhouseClient) SetupSchema(ctx context.Context) {
+	// Drop table if it exists
+	if err := c.conn.Exec(ctx, dropNodeTravelTimesTableQuery); err != nil {
+		panic(lib.AppLogger.Error(err, "failed to drop node_travel_times table"))
+	}
+
+	// Create table
+	if err := c.conn.Exec(ctx, createNodeTravelTimesTableQuery); err != nil {
+		panic(lib.AppLogger.Error(err, "failed to create node_travel_times table"))
+	}
+
+	lib.AppLogger.Info("Schema setup completed for node_travel_times table")
+}
+
 func (c *ClickhouseClient) FetchUniqueHashedShapesIDsByLine(ctx context.Context) types.HashedShapeIdsByLineArray {
 
 	// Scanner function to scan the unique hashed shapes

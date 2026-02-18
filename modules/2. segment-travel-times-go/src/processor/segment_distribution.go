@@ -3,6 +3,7 @@
 package processor
 
 import (
+	"main/src/lib"
 	"main/src/types"
 )
 
@@ -16,21 +17,16 @@ func distributeSegmentTravelTime(
 	shapeID string,
 	accumulators map[string]map[types.NodeHourKey]*types.NodeAccumulator,
 ) {
-	nodeDelta := currNodeIdx - prevNodeIdx
+	nodeDelta, timeDelta, _, speedKmh, timePerNode := computeSegmentMetrics(prevEvent, currEvent, prevNodeIdx, currNodeIdx)
 
 	// Enforce forward direction
 	if nodeDelta <= 0 {
 		return
 	}
 
-	timeDelta := float64(currEvent.CreatedAt - prevEvent.CreatedAt)
 	if timeDelta <= 0 {
 		return
 	}
-
-	// Speed validation in km/h
-	distanceKm := float64(nodeDelta) * 0.025 // 25m per node
-	speedKmh := (distanceKm / timeDelta) * 3600.0
 
 	const maxSpeedKmh = 120.0 // Upper bound for urban transit
 	const minSpeedKmh = 1.0   // Filters stale/stuck GPS
@@ -39,11 +35,9 @@ func distributeSegmentTravelTime(
 		return
 	}
 
-	timePerNode := timeDelta / float64(nodeDelta)
-
 	// Hour-of-day from epoch seconds
-	hour := uint8((prevEvent.CreatedAt / 3600) % 24)
-
+	hour := lib.GetHourFromTimestamp(int64(prevEvent.CreatedAt))
+	
 	shapeAcc, exists := accumulators[shapeID]
 	if !exists {
 		shapeAcc = make(map[types.NodeHourKey]*types.NodeAccumulator)
@@ -61,4 +55,25 @@ func distributeSegmentTravelTime(
 		}
 		acc.Samples = append(acc.Samples, timePerNode)
 	}
+}
+
+func computeSegmentMetrics(prevEvent, currEvent *types.VehicleEvent,prevNodeIdx, currNodeIdx int) (nodeDelta int, timeDelta float64, distanceMeters float64, speedKmh float64, timePerNode float64) {
+	//
+	
+	// Calculate node delta
+	nodeDelta = currNodeIdx - prevNodeIdx
+	
+	// Calculate time delta
+	timeDelta = (float64(currEvent.CreatedAt) - float64(prevEvent.CreatedAt)) / 1000.0 // Convert to seconds
+	
+	// Calculate distance meters
+	distanceMeters = float64(nodeDelta) * 25.0                                         // 25 meters per node
+	
+	// Calculate speed km/h
+	speedKmh = (distanceMeters / timeDelta) * 3.6                                      // Convert to km/h
+	
+	// Calculate time per node
+	timePerNode = timeDelta / float64(nodeDelta)
+	
+	return
 }

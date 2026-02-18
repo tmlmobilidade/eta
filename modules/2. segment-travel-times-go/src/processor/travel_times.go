@@ -62,28 +62,25 @@ func ProcessLineShapes(
 
 				nodesBearing := geo.CalculateBearing(prevEventNode, currEventNode)
 
-				if !geo.IsValidBearing(eventsBearing, nodesBearing, settings.BearingThreshold) && prevEventNode != currEventNode {
-					lib.AppLogger.LogToFile("bearing_debug.log",
-						"Events: \n 1: %v\n 2: %v\nNodes: \n 1: %v\n 2: %v\nEvents Bearing: %v\nNodes Bearing: %v\nNodes Index: %d, %d\nValid Bearing: %v",
-						prevEvent,
-						currEvent,
-						prevEventNode,
-						currEventNode,
-						eventsBearing,
-						nodesBearing,
-						slices.Index(shapeNodes, prevEventNode),
-						slices.Index(shapeNodes, currEventNode),
-						geo.IsValidBearing(eventsBearing, nodesBearing, settings.BearingThreshold),
-					)
-					panic("An invalid bearing was found")
+				if eventsBearing == 0 && prevEventNode != currEventNode{
+					lib.AppLogger.Info("Events bearing is 0 and nodes are different, skipping segment %d -> %d", slices.Index(shapeNodes, prevEventNode), slices.Index(shapeNodes, currEventNode))
+					continue;
 				}
+
+				if !geo.IsValidBearing(eventsBearing, nodesBearing, settings.BearingThreshold) {
+					continue;
+				}
+
+				prevNodeIdx := slices.Index(shapeNodes, prevEventNode)
+				currNodeIdx := slices.Index(shapeNodes, currEventNode)
 
 				distributeSegmentTravelTime(
 					&prevEvent, &currEvent,
-					slices.Index(shapeNodes, prevEventNode),
-					slices.Index(shapeNodes, currEventNode),
+					prevNodeIdx,
+					currNodeIdx,
 					shapeID, accumulators,
 				)
+				
 			}
 		}
 	}
