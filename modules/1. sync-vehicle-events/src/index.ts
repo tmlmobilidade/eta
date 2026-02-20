@@ -58,7 +58,7 @@ async function syncVehicleEvents(writer: ClickHouseWriter<EtaVehicleEvent>, star
 
 	const ridesQuery: Filter<Ride> = {
 		agency_id: { $in: AGENCY_IDS },
-		line_id: { $in: [1001, 1002] }, // ! Development only
+		// line_id: { $in: [1001, 1002] }, // ! Development only
 		start_time_observed: { $ne: null },
 		start_time_scheduled: { $gte: start.unix_timestamp, $lt: end.unix_timestamp },
 	};

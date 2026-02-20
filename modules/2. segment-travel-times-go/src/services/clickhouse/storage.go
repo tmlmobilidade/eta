@@ -149,7 +149,14 @@ type aggregationTable struct {
 	populate string
 }
 
-// SetupAggregations drops, creates, and populates all aggregation tables
+var aggregationTables = []string{
+	"shape_hourly_summary",
+	"hourly_network_summary",
+	"node_congestion_analysis",
+	"shape_performance",
+}
+
+// SetupAggregations creates, and populates all aggregation tables
 // derived from node_travel_times. Must be called after data insertion.
 // Order matters: shape_performance depends on shape_hourly_summary.
 func (c *ClickhouseClient) SetupAggregations(ctx context.Context) {
@@ -171,6 +178,17 @@ func (c *ClickhouseClient) SetupAggregations(ctx context.Context) {
 			panic(lib.AppLogger.Error(err, "failed to populate %s table", t.name))
 		}
 		lib.AppLogger.Info("Aggregation table %s created and populated", t.name)
+	}
+}
+
+
+// DropAggregationTables drops all aggregation tables.
+func (c *ClickhouseClient) DropAggregationTables(ctx context.Context) {
+	for _, t := range aggregationTables {
+		if err := c.conn.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", t)); err != nil {
+			panic(lib.AppLogger.Error(err, "failed to drop %s table", t))
+		}
+		lib.AppLogger.Info("Aggregation table %s dropped", t)
 	}
 }
 

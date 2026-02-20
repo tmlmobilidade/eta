@@ -53,6 +53,7 @@ func main() {
 
 	// Ensure ClickHouse tables exist (drop & recreate as needed)
 	clickhouseClient.SetupSchema(ctx)
+	clickhouseClient.DropAggregationTables(ctx)
 
 	//
 	// Fetch unique hashed shapes
