@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"main/src/lib"
 	"main/src/processor"
 	clickhouseService "main/src/services/clickhouse"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func initializeClients(config *lib.Config) (*clickhouseService.ClickhouseClient, *mongoService.MongoClient) {
@@ -37,6 +39,7 @@ func main() {
 	// Clear screen and initialize logger
 	lib.AppLogger.Clear()
 	lib.AppLogger.Init()
+	performanceTracker := lib.AppLogger.StartPerformanceTracker("main")
 
 	// Load configuration
 	config := lib.LoadConfig()
@@ -73,4 +76,7 @@ func main() {
 	clickhouseClient.InsertNodeTravelTimeRecords(ctx, records)
 
 	clickhouseClient.SetupAggregations(ctx)
+
+	duration := performanceTracker.End()
+	lib.AppLogger.Terminate(fmt.Sprintf("Segment travel times calculation completed successfully in %v!", duration.Round(time.Second)))
 }

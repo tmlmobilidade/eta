@@ -336,9 +336,10 @@ func (l *Logger) StartPerformanceTracker(operation string) *PerformanceTracker {
 }
 
 // End stops the performance tracker and logs the duration
-func (pt *PerformanceTracker) End() {
+func (pt *PerformanceTracker) End() time.Duration {
 	duration := time.Since(pt.start)
 	pt.logger.Debug("%s", fmt.Sprintf("[%s] Operation completed in %v", pt.operation, duration))
+	return duration
 }
 
 // ProgressBar represents a progress bar instance

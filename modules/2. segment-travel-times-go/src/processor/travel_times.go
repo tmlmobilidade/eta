@@ -26,11 +26,9 @@ func ProcessLineShapes(
 	accumulators := make(map[string]map[types.NodeHourKey]*types.NodeAccumulator)
 
 	for lineID, lineShape := range lineShapesMap {
+		//
 
-		if lineID != 1001 {
-			continue
-		}
-
+		
 		geohashes := lib.SetToSlice(lineShape.Geohashes)
 		vehicleEvents := clickhouseClient.FetchVehicleEvents(ctx, geohashes, settings)
 		lib.AppLogger.Info("Found %d vehicle events for line %d", len(vehicleEvents), lineID)
