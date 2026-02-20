@@ -11,7 +11,7 @@ import (
 // matched events. Assumes uniform speed distribution across equally-spaced
 // nodes (25m apart). Discards segments with invalid direction or unrealistic speed.
 // The hour is derived from the previous event's timestamp to bucket results by time of day.
-func distributeSegmentTravelTime(
+func DistributeSegmentTravelTime(
 	prevEvent, currEvent *types.VehicleEvent,
 	prevNodeIdx, currNodeIdx int,
 	shapeID string,
@@ -57,7 +57,12 @@ func distributeSegmentTravelTime(
 	}
 }
 
-func computeSegmentMetrics(prevEvent, currEvent *types.VehicleEvent,prevNodeIdx, currNodeIdx int) (nodeDelta int, timeDelta float64, distanceMeters float64, speedKmh float64, timePerNode float64) {
+// ComputeSegmentMetrics is exported for use by tests in processor/tests.
+func ComputeSegmentMetrics(prevEvent, currEvent *types.VehicleEvent, prevNodeIdx, currNodeIdx int) (nodeDelta int, timeDelta float64, distanceMeters float64, speedKmh float64, timePerNode float64) {
+	return computeSegmentMetrics(prevEvent, currEvent, prevNodeIdx, currNodeIdx)
+}
+
+func computeSegmentMetrics(prevEvent, currEvent *types.VehicleEvent, prevNodeIdx, currNodeIdx int) (nodeDelta int, timeDelta float64, distanceMeters float64, speedKmh float64, timePerNode float64) {
 	//
 	
 	// Calculate node delta

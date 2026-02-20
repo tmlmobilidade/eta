@@ -78,7 +78,7 @@ func ProcessLineShapes(
 				prevNodeIdx := slices.Index(shapeNodes, prevEventNode)
 				currNodeIdx := slices.Index(shapeNodes, currEventNode)
 
-				distributeSegmentTravelTime(
+				DistributeSegmentTravelTime(
 					&prevEvent, &currEvent,
 					prevNodeIdx,
 					currNodeIdx,
