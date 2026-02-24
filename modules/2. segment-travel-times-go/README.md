@@ -13,7 +13,7 @@ Multiple trip observations are aggregated per node **per hour of day** using the
 ## Step-by-Step Guide
 
 1. **Initialize** -- Load configuration, set up ClickHouse and MongoDB clients.
-2. **Setup Schema** -- Drop and recreate the `node_travel_times` table in ClickHouse.
+2. **Setup Tables** -- Drop and recreate the `node_travel_times` and `node_travel_times_samples` tables in ClickHouse.
 3. **Fetch Unique Hashed Shapes** -- Query ClickHouse for unique shape IDs grouped by line.
 4. **Generate Line Shapes** -- Fetch shape coordinates from MongoDB, chunk each shape into segment nodes using `ChunkLineIntoSegments()`, and compute geohashes for all segment endpoints.
 5. **Process Line Shapes** -- For each line:
@@ -23,10 +23,11 @@ Multiple trip observations are aggregated per node **per hour of day** using the
    4. **Validate Bearing** -- Calculate the bearing between the two events and the bearing between their matched nodes. Skip if bearings diverge beyond `BearingThreshold` (default 90 degrees). Also skip if events bearing is 0 but nodes differ.
    5. **Validate Direction** -- Ensure `currNodeIdx > prevNodeIdx` (forward travel). Discard reversed or zero-delta pairs.
    6. **Validate Speed** -- Calculate speed in km/h from the time and node deltas. Discard if outside the 1--120 km/h bounds.
-   7. **Distribute Travel Time** -- Divide the time delta uniformly across nodes in range `[prevNodeIdx, currNodeIdx)`. Append the per-node time as a sample to each node+hour accumulator.
-6. **Aggregate Samples** -- For each node+hour combination, compute the **median** of all collected samples across trips.
+   7. **Distribute Travel Time** -- Divide the time delta uniformly across nodes in range `[prevNodeIdx, currNodeIdx)`. Append the per-node time as a sample to each node+hour accumulator and produce a `NodeTravelTimeSampleRecord` for each node.
+   8. **Insert Raw Samples** -- After processing all events for a shape, batch insert sample records into the `node_travel_times_samples` table in ClickHouse.
+6. **Aggregate Samples** -- For each node+hour combination, compute the **median** (rounded to the nearest integer) of all collected samples across trips.
 7. **Build Output Records** -- Emit `NodeTravelTimeRecord` entries with shape ID, node index, hour, coordinates, median travel time, and sample count.
-8. **Insert Records** -- Batch insert records into ClickHouse.
+8. **Insert Records** -- Batch insert aggregated records into ClickHouse `node_travel_times` table.
 9. **Setup Aggregations** -- Create and populate derived tables: shape hourly summary, hourly network summary, node congestion analysis, and shape performance.
 
 ---
@@ -65,7 +66,9 @@ flowchart TD
     L -- Yes --> M[Derive hour from prev event timestamp]
     M --> N[Distribute time uniformly across nodes in range]
     N --> O[Append sample to node+hour accumulator]
+    N --> P[Produce NodeTravelTimeSampleRecord per node]
     O --> C
+    P --> Q[Batch insert samples into node_travel_times_samples]
 ```
 
 ---
@@ -152,12 +155,16 @@ flowchart TD
     E[Trip 4 @ 18:xx: node n4 = 120s] --> G[Node n4, Hour 18 Accumulator]
     F[Trip 5 @ 18:xx: node n4 = 110s] --> G
     D --> H[Sort: 75, 80, 320]
-    H --> I[Median = 80s]
+    H --> I["Median = round(80) = 80s"]
     G --> J[Sort: 110, 120]
-    J --> K[Median = 115s]
+    J --> K["Median = round((110+120)/2) = 115s"]
 ```
 
 In the example above, the same node has different travel times by hour -- 80s during morning and 115s during evening rush -- capturing time-of-day traffic patterns. Trip 3's outlier at 320s is filtered by the median.
+
+### Raw Samples Table
+
+In addition to the aggregated `node_travel_times` table, the pipeline inserts every individual travel time observation into the `node_travel_times_samples` table. Each row records the shape, node index, hour, GPS coordinates, event timestamp, computed travel time, and speed. This provides full traceability back to individual observations and supports downstream analysis or debugging.
 
 ### Derived Aggregation Tables
 
@@ -184,6 +191,19 @@ type NodeTravelTimeRecord struct {
     Longitude         float64 `ch:"longitude"`
     TravelTimeSeconds float32 `ch:"travel_time_seconds"`
     SampleCount       uint32  `ch:"sample_count"`
+}
+
+// NodeTravelTimeSampleRecord stores an individual raw travel time observation
+// per node, before aggregation. Inserted into node_travel_times_samples.
+type NodeTravelTimeSampleRecord struct {
+    ShapeID           string  `ch:"hashed_shape_id"`
+    NodeIndex         int     `ch:"node_index"`
+    Hour              uint8   `ch:"hour"`
+    Latitude          float64 `ch:"latitude"`
+    Longitude         float64 `ch:"longitude"`
+    CreatedAt         uint64  `ch:"created_at"`
+    TravelTimeSeconds float32 `ch:"travel_time_seconds"`
+    SpeedKmh          float64 `ch:"speed_kmh"`
 }
 
 // NodeHourKey uniquely identifies a node within a shape at a specific hour.
@@ -245,23 +265,26 @@ func computeSegmentMetrics(
 ### Core Distribution Function
 
 ```go
-// distributeSegmentTravelTime calculates per-node travel times between two
+// DistributeSegmentTravelTime calculates per-node travel times between two
 // matched events. Assumes uniform speed distribution across equally-spaced
 // nodes (25m apart). Discards segments with invalid direction or unrealistic speed.
 // The hour is derived from the previous event's timestamp to bucket results by time of day.
-func distributeSegmentTravelTime(
+// Returns raw sample records for each node in the segment, and populates accumulators
+// for later median aggregation.
+func DistributeSegmentTravelTime(
     prevEvent, currEvent *VehicleEvent,
     prevNodeIdx, currNodeIdx int,
     shapeID string,
     accumulators map[string]map[NodeHourKey]*NodeAccumulator,
-)
+) []NodeTravelTimeSampleRecord
 ```
 
 ### Median Calculation
 
 ```go
-// Median returns the median travel time from collected samples.
-func (a *NodeAccumulator) Median() float64 {
+// Median returns the median travel time from collected samples,
+// rounded to the nearest integer and returned as float32.
+func (a *NodeAccumulator) Median() float32 {
     n := len(a.Samples)
     if n == 0 {
         return 0
@@ -272,9 +295,9 @@ func (a *NodeAccumulator) Median() float64 {
     sort.Float64s(sorted)
 
     if n%2 == 0 {
-        return (sorted[n/2-1] + sorted[n/2]) / 2.0
+        return float32(math.Round((sorted[n/2-1] + sorted[n/2]) / 2.0))
     }
-    return sorted[n/2]
+    return float32(math.Round(sorted[n/2]))
 }
 ```
 
@@ -294,11 +317,16 @@ func BuildRecords(
 ## Outer Loop Integration
 
 ```go
+accumulators := make(map[string]map[NodeHourKey]*NodeAccumulator)
+shapeSamples := make([]NodeTravelTimeSampleRecord, 0)
+
 for lineID, lineShape := range lineShapesMap {
     geohashes := SetToSlice(lineShape.Geohashes)
     vehicleEvents := clickhouseClient.FetchVehicleEvents(ctx, geohashes, settings)
 
-    for _, shapeID := range hashedShapesByLine.GetShapesByLineID(lineID) {
+    shapeIDs := hashedShapesByLine.GetShapesByLineID(lineID)
+
+    for _, shapeID := range shapeIDs {
         shapeNodes, exists := lineShape.Nodes[shapeID]
         if !exists || len(shapeNodes) < 2 {
             continue
@@ -333,12 +361,16 @@ for lineID, lineShape := range lineShapesMap {
             prevNodeIdx := slices.Index(shapeNodes, prevEventNode)
             currNodeIdx := slices.Index(shapeNodes, currEventNode)
 
-            distributeSegmentTravelTime(
+            records := DistributeSegmentTravelTime(
                 &prevEvent, &currEvent,
                 prevNodeIdx, currNodeIdx,
                 shapeID, accumulators,
             )
+
+            shapeSamples = append(shapeSamples, records...)
         }
+
+        clickhouseClient.InsertNodeTravelTimeSamples(ctx, shapeSamples)
     }
 }
 ```

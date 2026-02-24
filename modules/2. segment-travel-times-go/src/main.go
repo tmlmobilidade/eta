@@ -55,7 +55,7 @@ func main() {
 	clickhouseClient, mongoClient := initializeClients(config)
 
 	// Ensure ClickHouse tables exist (drop & recreate as needed)
-	clickhouseClient.SetupSchema(ctx)
+	clickhouseClient.SetupTables(ctx)
 	clickhouseClient.DropAggregationTables(ctx)
 
 	//

@@ -29,6 +29,12 @@ var dropNodeTravelTimesTableQuery string
 //go:embed queries/create-node-travel-times.sql
 var createNodeTravelTimesTableQuery string
 
+//go:embed queries/drop-node-travel-times-samples.sql
+var dropNodeTravelTimesSamplesTableQuery string
+
+//go:embed queries/create-node-travel-times-samples.sql
+var createNodeTravelTimesSamplesTableQuery string
+
 //go:embed queries/create-shape-hourly-summary.sql
 var createShapeHourlySummaryQuery string
 
@@ -127,20 +133,56 @@ func (c *ClickhouseClient) InsertNodeTravelTimeRecords(ctx context.Context, reco
 	lib.AppLogger.Info("Inserted %d records into node_travel_times", len(records))
 }
 
+func (c *ClickhouseClient) InsertNodeTravelTimeSamples(ctx context.Context, records []types.NodeTravelTimeSampleRecord) {
+	if len(records) == 0 {
+		return
+	}
+
+	batch, err := c.conn.PrepareBatch(ctx, "INSERT INTO node_travel_times_samples")
+	if err != nil {
+		panic(lib.AppLogger.Error(err, "failed to prepare batch for node_travel_times_samples"))
+	}
+
+	for i := range records {
+		if err := batch.AppendStruct(&records[i]); err != nil {
+			panic(lib.AppLogger.Error(err, "failed to append record to batch"))
+		}
+	}
+
+	if err := batch.Send(); err != nil {
+		panic(lib.AppLogger.Error(err, "failed to send batch to node_travel_times_samples"))
+	}
+
+	lib.AppLogger.Info("Inserted %d records into node_travel_times_samples", len(records))
+}
+
 // SetupSchema drops and recreates tables used by this service.
 // Currently manages the node_travel_times table.
-func (c *ClickhouseClient) SetupSchema(ctx context.Context) {
-	// Drop table if it exists
-	if err := c.conn.Exec(ctx, dropNodeTravelTimesTableQuery); err != nil {
-		panic(lib.AppLogger.Error(err, "failed to drop node_travel_times table"))
+func (c *ClickhouseClient) SetupTables(ctx context.Context) {
+	var schemaQueries = map[string][]string{
+		"drop": {
+			dropNodeTravelTimesTableQuery,
+			dropNodeTravelTimesSamplesTableQuery,
+		},
+		"create": {
+			createNodeTravelTimesTableQuery,
+			createNodeTravelTimesSamplesTableQuery,
+		},
+	}
+	
+	for _, query := range schemaQueries["drop"] {
+		if err := c.conn.Exec(ctx, query); err != nil {
+			panic(lib.AppLogger.Error(err, "failed to drop table"))
+		}
 	}
 
-	// Create table
-	if err := c.conn.Exec(ctx, createNodeTravelTimesTableQuery); err != nil {
-		panic(lib.AppLogger.Error(err, "failed to create node_travel_times table"))
+	for _, query := range schemaQueries["create"] {
+		if err := c.conn.Exec(ctx, query); err != nil {
+			panic(lib.AppLogger.Error(err, "failed to create table"))
+		}
 	}
 
-	lib.AppLogger.Info("Schema setup completed for node_travel_times table")
+	lib.AppLogger.Info("Schema setup completed")
 }
 
 type aggregationTable struct {

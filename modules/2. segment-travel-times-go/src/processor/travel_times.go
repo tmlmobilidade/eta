@@ -24,6 +24,7 @@ func ProcessLineShapes(
 ) []types.NodeTravelTimeRecord {
 
 	accumulators := make(map[string]map[types.NodeHourKey]*types.NodeAccumulator)
+	shapeSamples := make([]types.NodeTravelTimeSampleRecord, 0)
 
 	for lineID, lineShape := range lineShapesMap {
 		//
@@ -33,7 +34,12 @@ func ProcessLineShapes(
 		vehicleEvents := clickhouseClient.FetchVehicleEvents(ctx, geohashes, settings)
 		lib.AppLogger.Info("Found %d vehicle events for line %d", len(vehicleEvents), lineID)
 
-		for _, shapeID := range hashedShapesByLine.GetShapesByLineID(lineID) {
+		shapeIDs := hashedShapesByLine.GetShapesByLineID(lineID)
+		lib.AppLogger.Info("Found %d shapes for line %d", len(shapeIDs), lineID)
+
+		for i, shapeID := range shapeIDs {
+			lib.AppLogger.Info("Processing shape %d of %d: %s", i, len(shapeIDs), shapeID)
+			lib.AppLogger.Info("Found %d vehicle events for shape %s", len(vehicleEvents), shapeID)
 
 			shapeNodes, exists := lineShape.Nodes[shapeID]
 
@@ -75,15 +81,19 @@ func ProcessLineShapes(
 				prevNodeIdx := slices.Index(shapeNodes, prevEventNode)
 				currNodeIdx := slices.Index(shapeNodes, currEventNode)
 
-				DistributeSegmentTravelTime(
+				records := DistributeSegmentTravelTime(
 					&prevEvent, &currEvent,
 					prevNodeIdx,
 					currNodeIdx,
 					shapeID, accumulators,
 				)
 				
+				shapeSamples = append(shapeSamples, records...)
 			}
+			
+			clickhouseClient.InsertNodeTravelTimeSamples(ctx, shapeSamples)
 		}
+
 	}
 
 	// Build per-node travel time records keyed by shapeID + node + hour.

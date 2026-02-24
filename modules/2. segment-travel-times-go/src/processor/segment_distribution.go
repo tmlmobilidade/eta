@@ -5,6 +5,7 @@ package processor
 import (
 	"main/src/lib"
 	"main/src/types"
+	"math"
 )
 
 // distributeSegmentTravelTime calculates per-node travel times between two
@@ -16,23 +17,25 @@ func DistributeSegmentTravelTime(
 	prevNodeIdx, currNodeIdx int,
 	shapeID string,
 	accumulators map[string]map[types.NodeHourKey]*types.NodeAccumulator,
-) {
+) []types.NodeTravelTimeSampleRecord {
+	var records []types.NodeTravelTimeSampleRecord
+	
 	nodeDelta, timeDelta, _, speedKmh, timePerNode := computeSegmentMetrics(prevEvent, currEvent, prevNodeIdx, currNodeIdx)
 
 	// Enforce forward direction
 	if nodeDelta <= 0 {
-		return
+		return nil
 	}
 
 	if timeDelta <= 0 {
-		return
+		return nil
 	}
 
 	const maxSpeedKmh = 120.0 // Upper bound for urban transit
 	const minSpeedKmh = 1.0   // Filters stale/stuck GPS
 
 	if speedKmh > maxSpeedKmh || speedKmh < minSpeedKmh {
-		return
+		return nil
 	}
 
 	// Hour-of-day from epoch seconds
@@ -47,6 +50,16 @@ func DistributeSegmentTravelTime(
 	// Distribute time to nodes [prevNodeIdx, currNodeIdx).
 	// Each node's value = time to traverse from this node to the next.
 	for nodeIdx := prevNodeIdx; nodeIdx < currNodeIdx; nodeIdx++ {
+		records = append(records, types.NodeTravelTimeSampleRecord{
+			ShapeID: shapeID,
+			NodeIndex: nodeIdx,
+			Hour: hour,
+			Latitude: prevEvent.Latitude,
+			Longitude: prevEvent.Longitude,
+			CreatedAt: prevEvent.CreatedAt,
+			TravelTimeSeconds: float32(math.Round(timePerNode)),
+			SpeedKmh: speedKmh,
+		})
 		key := types.NodeHourKey{NodeIdx: nodeIdx, Hour: hour}
 		acc, exists := shapeAcc[key]
 		if !exists {
@@ -55,6 +68,8 @@ func DistributeSegmentTravelTime(
 		}
 		acc.Samples = append(acc.Samples, timePerNode)
 	}
+
+	return records
 }
 
 // ComputeSegmentMetrics is exported for use by tests in processor/tests.
