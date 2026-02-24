@@ -25,7 +25,12 @@ func toDegrees(radians float64) float64 {
 
 // CalculateBearing calculates the bearing (direction) from one coordinate to another.
 // Returns bearing in degrees (0-360, where 0 is North).
+// If the coordinates are the same, returns -1.
 func CalculateBearing(from, to types.Coordinate) float64 {
+	if from.Latitude() == to.Latitude() && from.Longitude() == to.Longitude() {
+		return -1
+	}
+
 	lat1 := toRadians(from.Latitude())
 	lat2 := toRadians(to.Latitude())
 	dLon := toRadians(to.Longitude() - from.Longitude())
@@ -57,6 +62,10 @@ func GetAngularDifference(bearing1, bearing2 float64) float64 {
 // IsValidBearing checks if an event bearing is valid (matches shape direction within threshold).
 // An event is valid if its bearing is within the threshold of the shape bearing.
 func IsValidBearing(b1, b2, thresholdDegrees float64) bool {
+	if b1 == -1 || b2 == -1 {
+		return false
+	}
+
 	difference := GetAngularDifference(b1, b2)
 	return difference <= thresholdDegrees
 }
