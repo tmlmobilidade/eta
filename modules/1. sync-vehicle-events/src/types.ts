@@ -36,3 +36,19 @@ export const EtaVehicleEventTableSchema: ClickHouseColumn<EtaVehicleEvent>[] = [
 	{ name: 'agency_id', type: 'String' },
 	{ name: 'vehicle_id', type: 'String' },
 ];
+
+//
+
+export interface ShapeNode {
+	latitude: number
+	longitude: number
+	node_index: number
+	shape_id: string
+}
+
+export const ShapeNodeTableSchema: ClickHouseColumn<ShapeNode>[] = [
+	{ name: 'shape_id', type: 'String' },
+	{ name: 'node_index', type: 'UInt32' },
+	{ name: 'longitude', type: 'Float64' },
+	{ name: 'latitude', type: 'Float64' },
+];

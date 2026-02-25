@@ -29,6 +29,15 @@ var dropNodeTravelTimesTableQuery string
 //go:embed queries/create-node-travel-times.sql
 var createNodeTravelTimesTableQuery string
 
+//go:embed queries/create-node-travel-times-samples.sql
+var createNodeTravelTimesSamplesTableQuery string
+
+//go:embed queries/create-shape-nodes.sql
+var createShapeNodesTableQuery string
+
+//go:embed queries/trasnformation-pipeline.sql
+var transformationPipelineQuery string
+
 //go:embed queries/create-shape-hourly-summary.sql
 var createShapeHourlySummaryQuery string
 
@@ -99,6 +108,24 @@ func (c *ClickhouseClient) FetchVehicleEvents(ctx context.Context, geohashes []s
 	return events
 }
 
+// InsertShapeNodes inserts a single shape node record into the shape_nodes table.
+func (c *ClickhouseClient) InsertShapeNodes(ctx context.Context, nodes []types.ShapeNode) {
+	batch, err := c.conn.PrepareBatch(ctx, "INSERT INTO shape_nodes")
+	if err != nil {
+		panic(lib.AppLogger.Error(err, "failed to prepare batch for shape_nodes"))
+	}
+
+	for _, node := range nodes {
+		if err := batch.AppendStruct(&node); err != nil {
+			panic(lib.AppLogger.Error(err, "failed to append shape node to batch"))
+		}
+	}
+
+	if err := batch.Send(); err != nil {
+		panic(lib.AppLogger.Error(err, "failed to send batch to shape_nodes"))
+	}
+}
+
 /**
 	Fetches unique hashed shapes from the database.
 	@return []string: The unique hashed shapes.
@@ -127,20 +154,45 @@ func (c *ClickhouseClient) InsertNodeTravelTimeRecords(ctx context.Context, reco
 	lib.AppLogger.Info("Inserted %d records into node_travel_times", len(records))
 }
 
+// RunTransformationPipeline executes the ClickHouse SQL pipeline that
+// populates node_travel_times_samples from vehicle_events and shape_nodes.
+func (c *ClickhouseClient) RunTransformationPipeline(ctx context.Context) {
+	if err := c.conn.Exec(ctx, transformationPipelineQuery); err != nil {
+		panic(lib.AppLogger.Error(err, "failed to execute transformation pipeline"))
+	}
+	lib.AppLogger.Info("Transformation pipeline executed successfully")
+}
+
 // SetupSchema drops and recreates tables used by this service.
 // Currently manages the node_travel_times table.
 func (c *ClickhouseClient) SetupSchema(ctx context.Context) {
-	// Drop table if it exists
+	// Drop tables if they exist
 	if err := c.conn.Exec(ctx, dropNodeTravelTimesTableQuery); err != nil {
 		panic(lib.AppLogger.Error(err, "failed to drop node_travel_times table"))
 	}
 
-	// Create table
+	if err := c.conn.Exec(ctx, "DROP TABLE IF EXISTS shape_nodes"); err != nil {
+		panic(lib.AppLogger.Error(err, "failed to drop shape_nodes table"))
+	}
+
+	if err := c.conn.Exec(ctx, "DROP TABLE IF EXISTS node_travel_times_samples"); err != nil {
+		panic(lib.AppLogger.Error(err, "failed to drop node_travel_times_samples table"))
+	}
+
+	// Create tables
 	if err := c.conn.Exec(ctx, createNodeTravelTimesTableQuery); err != nil {
 		panic(lib.AppLogger.Error(err, "failed to create node_travel_times table"))
 	}
 
-	lib.AppLogger.Info("Schema setup completed for node_travel_times table")
+	if err := c.conn.Exec(ctx, createShapeNodesTableQuery); err != nil {
+		panic(lib.AppLogger.Error(err, "failed to create shape_nodes table"))
+	}
+
+	if err := c.conn.Exec(ctx, createNodeTravelTimesSamplesTableQuery); err != nil {
+		panic(lib.AppLogger.Error(err, "failed to create node_travel_times_samples table"))
+	}
+
+	lib.AppLogger.Info("Schema setup completed for node_travel_times, shape_nodes, and node_travel_times_samples tables")
 }
 
 type aggregationTable struct {
